@@ -1,0 +1,3247 @@
+<?php
+ class city58vip2_ex extends city58vip2{
+ 	Public function login()
+	{
+		$this->loginis = 'post';
+		$this->t_action_name = 'post';
+		$wid = $this->site[$this->siteid]['id'];
+		$userName = $this->site[$this->siteid]['userName'];
+		$userKey = $this->site[$this->siteid]['userKey'] ;
+		$city = $this->patten['city'];
+		$this->WID = $wid;
+		$ret =  $this->actionLogin($wid,$userName,$userKey,$city);
+		if(is_array($ret) && $ret['status'] == '9' && !empty($this->site[$this->siteid]['waid']))
+		{
+			$tmpres = $this->getuserinfo();
+			if($tmpres)$this->updateUserInfo($tmpres,$this->site[$this->siteid]['waid']);
+		}
+		$set_cookie_arr = array(
+			'new_session'=>1,
+			'init_refer'=>'',
+			'new_uv'=>1,
+		);
+		$this->setCookieValue($set_cookie_arr);
+		return $ret ;
+	}
+ 	public function postform()
+	{
+		$this->falseStatus = 0 ;
+		$pData = $this->data[$this->dataid] ;
+		if($pData['dataType'] == 'new')$pData['dataType'] = 'second_sale';
+		$patName = $pData['dataType'] ;
+		$this->tmp_community_name = '';
+		$this->tmp_content_d = '';
+		//$this->old_city = $this->patten['city'];
+		//if($pData['City'] != $this->patten['city'])
+			//$this->initializeForm($pData['City']);
+		$tmp = $this->patten;
+		$this->tmpfield = '' ;
+		$this->housecode = '';
+		$this->tmpimagearray = array();
+		if($this->checkPosition()==FALSE)
+			return FALSE ;
+		if($pData['dataType'] == 'second_sale' && $tmp['city'] != 31 && $tmp['city'] != 102 && $tmp['city'] != 37 && $this->old_city != 101  && $tmp['city'] != 25)
+		{
+			if($this->getform2()==FALSE)
+				return FALSE ;
+		}else
+		{
+			if($this->getform()==FALSE)
+				return FALSE ;
+		}
+		/*检测小区是否存在*/
+		if($this->checkDataByComunityd($this->user,$this->site[$this->siteid],array('Community'=>$this->tmp_community_name)) == false)
+		{
+			$this->errInfo = '发布失败，贵公司不支持该小区的发布：'.$this->tmp_community_name.'。@02';
+			return FALSE;
+		}
+		if($this->translate()==FALSE)
+			return FALSE ;
+		if($patName == 'second_sale' && $this->type < 11)
+		{
+			$this->errInfo .= '|P|';
+			$price_result = $this->check_price();//检测低价违规
+			if($price_result == false)return false;
+		}
+		$result = $this->checkPostInfo();
+		if(!empty($this->tmpimagearray) && $result == true)
+		{
+			unset($this->tmpfield['pic']);
+			unset($this->tmpfield['Pic']);
+			$this->errInfo .= 'repostT';
+			$this->tmpfield = array_merge($this->tmpfield,$this->tmpimagearray);
+		}else
+		{
+			if($this->uploadpics()==FALSE)
+				return FALSE;
+		}
+		$tmp = $this->patten; //小区推送廊坊重置 城市 用到
+		if(!in_array($this->old_city,array(1,5,)))
+		{
+			$GetIPs_arr = $this->GetIPs($this->WID,$this->old_city); 
+			!empty($GetIPs_arr['IP']) && $this->tmpIPPo3 = $GetIPs_arr['IP'];
+			$this->errInfo .= $GetIPs_arr['errInfo'];
+		}
+		$postfields = $this->tmpfield ;
+		$content = '';
+		/*初始化数组顺序*/
+		if(in_array($this->old_city,array(2,4,7,12,14,19,24,26,)))
+		{
+			$tmp_postfields = $postfields;
+			$tmp_type = ($this->type<11)?1:$this->type;
+			$tmp_name = $patName.'_'.$tmp_type;
+			if($patName == 'rent' && $tmp_type<11)
+			{
+				if($rData['rentType'] == '1')//整租
+				{
+					$tmp_name = 'rent_zhengzu';
+				}else//合租
+				{
+					$tmp_name = 'rent_hezu';
+				}
+				//$this->errInfo .= '|TS:'.$tmp_name.'|' ;
+			}
+			if(!empty($this->post_feilds_arr[$tmp_name]))
+			{
+				$tmp_postfields2 = $this->post_feilds_arr[$tmp_name];
+				$postfields = array_merge($tmp_postfields2,$postfields);
+				//$this->errInfo .= '|NEW'.count($postfields).'|' ;
+			}else
+				$this->errInfo .= 'L:'.$tmp_name.'|' ;
+		}
+		
+		/*---整理数据--*/
+		$content = '';
+		foreach($postfields as $key => $value)
+		{
+			if(is_array($value))
+			{
+				foreach($value as $key1 => $val)
+					$content .= urlencode($key).'='.urlencode($val).'&';
+			}else
+			{
+				if($key == 'fangYuanXiangQing' || $key == 'fuWuJieShao' || $key == 'xiaoQuPeiTao'||$key == 'yeZhuXingTai')
+				{
+					$content .= $key.'=&';
+				}
+				if($key == 'file1' || $key == 'file2' || $key == 'file3')
+				{
+					$content .= 'file=&';
+					continue;
+				}
+				if($key == 'room_upload_validate')
+				{
+					$content .= 'room_upload_validate=0.4462158654267'.mt_rand(1111,9999).'&';
+					continue;
+				}
+				if($key == $this->loginsign)
+					continue;
+				$content .= urlencode($key).'='.urlencode($value).'&';
+			}
+		}
+		$content .= $this->loginsign.'='.urlencode($this->tmpsiginfo);
+		/*---end----*/
+		$this->refer = $this->url;
+		
+		/*延时操作新加*/
+		$mt_rand = mt_rand(40,45);
+		$this->errInfo .= "|S1:".$mt_rand."|" ;
+		sleep($mt_rand);
+		/*---end---*/
+		$this->methodPostMutil($this->url,$content,$tmp['encoding']);
+		$old_content = urldecode($this->content);
+		$this->web_cookie_count++;
+		
+		/*--重新获取资源信息--*/
+		$tmp_content_d = $this->content;
+		if(preg_match('/location: (.*)\r\n/isU',$this->content,$view2))
+		{
+			$this->refer = $this->url;
+			//sleep(1);
+			$loc_url = trim($view2[1]);
+			if(!strstr($this->content , "http:"))
+			{
+				$loc_url = 'http://vip.58ganji.com'.$loc_url;
+			}
+			$this->methodGetMD($loc_url,$tmp['encoding']);
+			if($this->content == false)
+			{
+				$this->errInfo .= '|YU|';
+				//sleep(2);
+				$this->methodGetMD($loc_url,$tmp['encoding']);
+			}
+			if(strstr($this->content , "成功"))
+			{
+				$this->errInfo .= '|LSS|';
+			}elseif(strstr($this->content , "风险"))
+			{
+				$this->errInfo .= '|LFX|';
+			}else
+			{
+				$this->errInfo .= '|LOT|';
+			}
+			
+			$this->methodGetMD('http://include.anjukestatic.com/broker-vip/res/20172404/b/'.$this->sanjuke_p2.'.css',$tmp['encoding']);
+			$this->methodGetMD('http://include.anjukestatic.com/broker-vip/res/20172404/b/'.$this->sanjuke_p2.'.js',$tmp['encoding']);
+			
+			$guid = $this->getCookieValue('aQQ_brokerguid');
+			$ssid = $this->getCookieValue('sessid');
+			$tmp_uid = $this->getCookieValue('ajk_broker_uid');
+			$luid = $this->getCookieValue('lui');//$this->getCookieValue('lui');
+			$tcontent = 't='.time().mt_rand(111,999).'&site=broker&plat=1&type=1&p=House_ResultPage&pn=&action=&r='.urlencode($this->url).'&sc=%7B%22w%22%3A%221823%22%2C%22h%22%3A%22141%22%2C%22r%22%3A%220%22%7D&h='.urlencode($loc_url).'&cp=&guid='.$guid.'&ctid='.$this->CitysID_1.'&luid='.$luid.'&ssid='.$ssid.'&uid='.$tmp_uid;
+				
+			$this->refer = $loc_url;
+			//sleep(1);
+			$this->methodPostMD('http://s.anjuke.com/stb?__site=anjuke&',$tcontent,$tmp['encoding']);
+			//sleep(1);
+			$this->methodGetMD('http://vip.58ganji.com/ajax/getmessage/?r=0.807278062038'.mt_rand(1111,9999),$tmp['encoding']);
+			if($this->content == false)
+			{
+				$this->errInfo .= '|YU2|';
+				//sleep(2);
+				$this->methodGetMD('http://vip.58ganji.com/ajax/getmessage/?r=0.807278062038'.mt_rand(1111,9999),$tmp['encoding']);
+			}
+			if(strstr($this->content , '"msg_stats":{"type":'))
+			{
+				$this->errInfo .= '|ASS|';
+			}else
+			{
+				$this->errInfo .= '|AOT|';
+			}
+			/*if($this->old_city == 2)
+			{
+				error_log($this->errInfo.'|anjuke58|'.$loc_url."\r\n".'&t:'.date("Y-m-d H:i:s").'&w:'.$this->WID.'&post&c:'.$this->old_city.'-'.$this->patten['cityName']."\r\n".print_r($tmp_arr_d,true)."\r\n------\r\n" , 3 , 'aaaaaaaa6666.log');
+			}*/
+		}else
+		{
+			$this->errInfo .= '|LS|';
+			//return FALSE;
+		}
+		$this->content = $tmp_content_d;
+		/*---end--*/	
+		
+		preg_match('/\[pro_id\]=([^>]*)\&/isU',$old_content,$view);
+		if(empty($view[1]))
+		{
+			if(preg_match('/\[msg\]=(.*)\&/isU',$old_content,$view) || preg_match('/message=(.*)\n/isU',$old_content,$view))
+			{
+				$error = urldecode($view[1]);
+			}else
+			{
+				if(preg_match('/info=(.*)\&/isU',$old_content,$view))
+				{
+					$error = $view[1];
+				}
+			}
+			if(empty($error)  || strstr($error,'调用API超时') || strstr($error,'服务xml解析失败') || $this->content == false)$this->falseStatus = 1 ;
+			/*if(strstr($error , "房源描述包含非法词"))
+				$error_d = '发布失败,房源描述包含非法词,请修改后发布。';
+			elseif(strstr($error , "面积 参数格式错误"))
+				$error_d = '发布失败,面积 参数格式错误,请修改后发布。';
+			elseif(strstr($error , "经纪人不能发布个人房源"))
+				$error_d = '发布失败,经纪人不能发布个人房源。';
+			elseif(strstr($error , "需要在三网绑定经纪公司"))
+				$error_d = '发布失败,需要在三网绑定经纪公司并在58认证营业执照后才能发帖。';
+			else
+				$error_d = '发布失败,网络接口繁忙,请稍后再试。';*/
+			if(empty($error))
+				$error = '发布失败,网络接口繁忙,请稍后再试。';
+			elseif(stristr($error,'Error on line 1'))
+				$error = '发布失败,房源描述包含特殊字符,请重新编辑。';
+			elseif(stristr($error,'vip用户发帖达到上线'))
+			{
+				$this->ispostLarge = 'yes';
+			}else
+				$error = '发布失败,'.$error;
+			if(strstr($this->content , "风险"))
+			{
+				if(strstr($this->content , "到您的登陆环境存在安全风险"))
+				{
+					$this->errInfo .= "|loginF|" ;
+					error_log('|city58|'.$this->tmpIPPo3.'&t:'.date("Y-m-d H:i:s").'&w:'.$this->WID.'&post&c:'.$this->old_city.'-'.$this->patten['cityName']."\r\n" , 3 , 'anjukeiptest6.log');
+				}
+				$this->falseStatus = 0;
+				$city_arr_name = array(7=>'chongqing',8=>'changchun',12=>'zhengzhou',17=>'shijiazhuang',26=>'foshan',27=>'wuxi',32=>'hefei',33=>'haerbin',);
+				$city_name = $city_arr_name[$this->old_city];
+				$this->errInfo .= "|FENFX{$this->tmpIPPo3}|" ;
+				$ttt333 = date("Y-m-d H:i:s");
+				error_log('|cityvip58|'.$this->tmpIPPo3.'&t:'.$ttt333.'&w:'.$this->WID.'&post&c:'.$this->old_city.'-'.$city_name."\r\n" , 3 , 'anjukeiptest1.log') ;
+			}else
+				$this->errInfo .= "|E{$this->tmpIPPo3}|" ;
+			
+			$this->errInfo = $this->checkErrorD($error,'请稍后再试10'.'C:'.$this->old_city,$this->errInfo);
+			$this->content .= 'aaa'.print_r($this->tmpfield , true)."\r\n" ;
+			$this->content .= 'bbbbb'.print_r($pData , true)."\r\n" ;
+			return FALSE ;
+		}
+		$id = $view[1];
+		$ret['id'] = $id;
+		if(in_array($this->type,array(13,14,17,18,99)))
+			$housename = 'fangchan';
+		elseif($this->type == 11)
+			$housename = 'shangpu';
+		elseif($this->type == 12)
+			$housename = 'zhaozu';
+		else
+		{
+			if($patName == "rent")
+			{
+				if($pData['Type4Property'] == '2')
+					$housename = "hezu";
+				else
+					$housename = "zufang";
+			}else
+				$housename = "ershoufang";
+		}
+		$ret['url'] = "http://{$tmp['cityName']}.58.com/{$housename}/{$view[1]}x.shtml";
+		/*房源、诚信、免税、推广操作*/
+		$this->actionUpDown('','up',$ret['id'],$this->site[$this->siteid]['prepare2'],$this->type);	
+		$this->checkPostInfo('insert',$ret['id']);
+		
+		$ret['number'] = $this->housecode;//编号
+		$ret['company'] = $this->user['Company1'];//公司
+		$ret['allprice'] = $pData['Total'];//房源价格
+		$ret['Group'] = $this->user['Group'];//套餐类型
+		$ret['Title'] = $this->tmpfield['title'];//标题 
+		$ret['Square'] = $pData['Square'];//面积
+		$House_room = '';
+		if(!empty($this->tmpfield['room']))$House_room .= $this->tmpfield['room'].'室';
+		if(!empty($this->tmpfield['hall']))$House_room .= $this->tmpfield['hall'].'厅';
+		$ret['House_room'] = $House_room;//室厅
+		$this->errInfo .= '|'.$this->tmpIPPo3.','.date("d H:i:s");
+		$this->t_cookie_des_is = 'yes';
+		return $ret;
+	}
+	public $ispostLarge = 'no';//是否已达到发帖上线
+	public function checkPosition()
+	{
+		if($this->ispostLarge == 'yes')
+		{
+			$this->errInfo = $this->checkErrorD('发布失败,vip用户发帖达到上线,无法发布房源。','|A|',$this->errInfo);
+			return false;
+		}
+		$tmp = $this->patten;
+		$pData = $this->data[$this->dataid] ;
+		if($pData['dataType'] == 'new')$pData['dataType'] = 'second_sale';
+		$prepare2 = $this->site[$this->siteid]['prepare2'];
+		$patName = 	$pData['dataType'] ;
+		if($patName == 'rent')
+			$type = $pData['Type4Property2'];
+		else
+			$type = $pData['Type4Property'];
+			
+		$this->errInfo .= "|L:".$this->t_login_is."|" ;
+		/*******判断城市*********/
+		if(!in_array($this->old_city,array(1,)))
+		{
+			$tmp_old_arr = $this->GetCItyByWid($this->WID,'select');
+			$tmp_old_city = $tmp_old_arr['City'];
+			$tmp_city = $this->old_city;
+			$this->errInfo .= "|Ca1:".$tmp_old_city."|" ;
+			$this->methodGet('http://vip.58ganji.com/broker/brokerinfo',$tmp['encoding']);
+			$tmp_content = urldecode($this->content);
+			if(preg_match('#所属公司：([^<]*)<#isU',$this->content,$view))
+			{
+				$tmp_company = trim($view[1]);
+				$this->web_company = trim($tmp_company);
+			}elseif(strstr($tmp_content , '进行手机号验证'))
+			{
+				error_log('U:'.$this->site[$this->siteid]['userName'].',C:'.$this->patten['city'].',W:'.$this->WID.',U:'.$this->user['UID'].',A:'.$this->loginis.',D:'.date("Y-m-d H:i:s").',city58.login8'."\r\n",3,'aaaabbbMobilenew58.log');
+				$this->errInfo = $this->checkErrorD('发布失败,请进行手机号码验证。','请稍后再试266',$this->errInfo);
+				return false;
+			}else
+			{
+				if(strstr($this->content,'Location: http://vip.58ganji.com/login?history'))
+				{
+					$this->deleteOldCookie($this->WID);
+					$this->errInfo .= '|DCK1|';
+				}
+				//error_log($this->user['UID'].'|||'.$this->WID."|".$tmp_old_city.'|'.$this->old_city.'|'.$this->content."\r\n",3,'aaaaaaaa12345666.log');
+				$this->errInfo .= "|Cb:|";
+				$this->falseStatus = 1 ;
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再试216',$this->errInfo);
+				return false;
+			}
+			if(preg_match('#所在城市：[^>]*>([^<]*)<#isU',$this->content,$view))
+			{
+				$this->errInfo .= "|C:".$view[1]."|" ;
+				if($view[1] == '惠州')$tmp_city = 24;
+				if($view[1] == '佛山')$tmp_city = 26;
+				if($view[1] == '中山')$tmp_city = 30;
+				if($view[1] == '东莞')$tmp_city = 14;
+				if($view[1] == '广州')$tmp_city = 2;
+				if($view[1] == '深圳')$tmp_city = 3;
+				if($view[1] == '成都')$tmp_city = 4;
+				if($view[1] == '重庆')$tmp_city = 7;
+				if($view[1] == '嘉兴')$tmp_city = 101;
+				if($view[1] == '清远')$tmp_city = 102;
+				if($tmp_old_city != $tmp_city || $tmp_company!=$tmp_old_arr['feilds'] || $tmp_city != $this->old_city)
+				{
+					$this->initializeForm($tmp_city) ;
+					$tmp = $this->patten;
+					if(!empty($tmp_company))
+					{
+						if(empty($tmp_old_city))
+							$this->GetCItyByWid($this->WID,'insert',$this->user['UID'],'403',$this->old_city,$tmp_company);
+						else
+							$this->GetCItyByWid($this->WID,'update',$this->user['UID'],'403',$this->old_city,$tmp_company);
+					}
+					//error_log(date("Y-m-d H:i:s").'|anju|'.$this->user['UID'].'|||'.$this->WID."|".$tmp_old_city.'|'.$this->old_city."\r\n",3,'aaaaaaaa12345.log');
+				}
+			}else
+			{
+				//error_log($this->user['UID'].'|||'.$this->WID."|".$tmp_old_city.'|'.$this->old_city.'|'.$this->content."\r\n",3,'aaaaaaaa12345666.log');
+				$this->errInfo .= "|Cb:|";
+				$this->falseStatus = 1 ;
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再试206',$this->errInfo);
+				return false;
+			}
+		}
+		/*****end******/
+		
+		if(in_array($type,array(13,14,17,18,99)))
+		{ 
+			$name = '厂房';
+			$utype = 'jp';
+			$utype2 = 'cf';
+			$cateid = '15';
+			$jingxuan_url = "http://vip.58ganji.com/jp58/list/cf";
+		}elseif($type == 12)
+		{
+			$name = '写字楼';
+			$utype = 'jp';
+			$utype2 = 'xz';
+			$cateid = '13';
+			$sanjuke_p = 'House_PublishJpOfficePage';
+			$sanjuke_p2 = 'House_PublishJpOffice';
+			$jingxuan_url = "http://vip.58ganji.com/jp58/list/xz";
+			$add_url2 = 'http://vip.58ganji.com/house/publish/office/?from=manage';
+		}elseif($type == 11)
+		{
+			$name = '商铺';
+			$utype = 'jp';
+			$utype2 = 'sp';
+			$cateid = '14';
+			$sanjuke_p = 'House_PublishJpShopPage';
+			$sanjuke_p2 = 'House_PublishJpShop';
+			$jingxuan_url = "http://vip.58ganji.com/jp58/list/sp";
+			$add_url2 = 'http://vip.58ganji.com/house/publish/office/?from=manage';
+		}else
+		{
+			if($patName == 'rent')
+			{
+				$name = '出租住宅';
+				$utype = 'zf';
+				$cateid = '8';
+				$sanjuke_p = 'House_PublishRentPage';
+				$sanjuke_p2 = 'House_PublishRent';
+				$add_url2 = 'http://vip.58ganji.com/house/publish/rent/?from=manage';
+			}else
+			{
+				$name = '出售住宅';
+				$utype = 'esf';
+				$cateid = '12';
+				$sanjuke_p = 'House_PublishErshouPage';
+				$sanjuke_p2 = 'House_PublishErshou';
+				$add_url2 = 'http://vip.58ganji.com/house/publish/ershou/?from=manage';
+			}
+			$utype2 = '';
+			$jingxuan_url = "http://vip.58ganji.com/{$utype}58/jpzw58";
+		}
+		$this->housename = $name;
+		$this->sanjuke_p = $sanjuke_p;
+		$this->sanjuke_p2 = $sanjuke_p2;
+		$this->add_url2 = $add_url2;
+		$url = "http://vip.58ganji.com/{$utype}58/yxtg{$utype2}58";
+		$this->methodGet($url , $tmp['encoding']);
+		if(strstr($this->content , '><h1>503 Service Temporarily Unavailable'))
+		{
+			$this->errInfo .= '|S|';
+			sleep(1);
+			$this->methodGet($url , $tmp['encoding']);
+		}
+		if(strstr($this->content , '><h1>503 Service Temporarily Unavailable'))
+		{
+			$this->errInfo .= '|S|';
+			sleep(1);
+			$this->methodGet($url , $tmp['encoding']);
+		}
+		if(strstr($this->content,'Location: http://vip.58ganji.com/login?history'))
+		{
+			$this->deleteOldCookie($this->WID);
+			$this->errInfo .= '|DCK|';
+		}
+		if(strstr($this->content , '权限已过期'))
+		{
+			$this->errInfo = $this->checkErrorD('发布失败,不支持该"'.$name.'端口"的推送。','',$this->errInfo);
+			return false;
+		}
+		if(strstr($this->content,'Location: http://my.anjuke.com/user/broker/brokerhome/'))
+		{
+			$this->deleteOldCookie($this->WID);
+			$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推148',$this->errInfo); 
+			$this->falseStatus = 1 ;
+			return false;
+		}
+		if(strstr($this->content,'location: /bindshow'))
+		{
+			$this->deleteOldCookie($this->WID);
+			$this->errInfo = $this->checkErrorD('发布失败,没有此频道发布权限。','请稍后再推145',$this->errInfo); 
+			return false;
+		}
+		if(strstr($this->content,'location: /broker/wubacommercial'))
+		{
+			$this->errInfo = $this->checkErrorD('发布失败,没有此频道发布权限。','请稍后再推146',$this->errInfo);
+			return false;
+		}
+		if(!strstr($this->content,'推送中'))
+		{
+			$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推1',$this->errInfo);
+			$this->falseStatus = 1 ;
+			return false;
+		}
+		if(preg_match('/brokerId[^>]*=[^>]*\+\'([^>]*)\'/isU' , $this->content , $view)<=0)
+		{
+			$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推12',$this->errInfo);
+			$this->falseStatus = 1 ;
+			return false;
+		}
+		$this->brokerId = $view[1];
+		/*未推广房源  诚信房 免税房 商铺 写字楼 不做此操作*/
+		if($prepare2 == '1'  || $prepare2 == '2' || $prepare2 == '3')
+			return true;
+		if(strstr($this->content , '还可推送：<em>0<'))
+		{
+			if(preg_match('/7<\/i>.*上一页<\/i>(.*)下一页<\/[ai]>/isU' , $this->content , $con))
+			{
+				if(strstr($con[1],'class="ui-multipage-next-disable"'))
+					$page = 1;
+				else
+				{
+					if(preg_match_all('/">([0-9]*)<\/[ai]>/isU',$con[1], $view))
+					{
+						$page = end($view[1]);
+					}
+				}
+				if(empty($page))
+				{
+					$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推121',$this->errInfo);
+					$this->falseStatus = 1 ;
+					return false;
+				}
+				for($page;$page>=1;$page--)
+				{
+					$this->methodGet($url."/W0QQpZ".$page , $tmp['encoding']);
+					$this->errInfo .= '|A|';
+					if(!strstr($this->content,'推送中'))
+					{
+						$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推2',$this->errInfo);
+						$this->falseStatus = 1 ;
+						return false;
+					}
+					if(preg_match_all('/type="checkbox" data-id="([0-9]*)".*发布：(.*)，修改/isU' , $this->content , $view))//id
+					{
+						/*查询置顶房源*/
+						$oldcontent = $this->content;
+						if($type >= 11)
+							$zdtype = 'biz';
+						else
+							$zdtype = $utype;
+						$this->methodGet("http://vip.58ganji.com/{$zdtype}58/zdlist?dispCateId={$cateid}" , $tmp['encoding']);
+						if(preg_match_all('/tid="(\d+)">/isU' , $this->content , $view2))
+						{
+							$this->errInfo .= '|zd|';
+							$zdlist = $view2[1];
+							foreach ($zdlist as $zdid)
+							{
+								$k = array_search($zdid,$view[1]);
+								if($k !== false)
+								{
+									//$this->errInfo .= '|zid'.$view[1][$k].'|';
+									unset($view[1][$k]);
+									unset($view[2][$k]);
+								}
+							}
+						}else
+							$this->errInfo .= '|nzd|';
+						/********end********/
+						sleep(1);
+						/*查询精选房源*/
+						$this->methodGet($jingxuan_url , $tmp['encoding']);
+						if(preg_match_all('/tId="(\d+)"\s*tgId/isU' , $this->content , $view2))
+						{
+							$this->errInfo .= '|jx|';
+							$jxlist = $view2[1];
+							foreach ($jxlist as $jxid)
+							{
+								$k = array_search($jxid,$view[1]);
+								if($k !== false)
+								{
+									//$this->errInfo .= '|zid'.$view[1][$k].'|';
+									unset($view[1][$k]);
+									unset($view[2][$k]);
+								}
+							}
+						}else
+							$this->errInfo .= '|njx|';
+						/********end********/
+						$this->content = $oldcontent;
+						$id = end($view[1]);
+						$ptime = end($view[2]);
+						if(empty($id))
+						{
+							if($page > 1)
+							{
+								continue;
+							}else
+							{
+								$this->errInfo = $this->checkErrorD('发布失败,该类别中暂无可下架房源,请进行手动下架房源。','请稍后再推133',$this->errInfo);
+								return false;
+							}
+						}
+						/*if(strstr($ptime,date('m-d')))
+						{
+							$this->errInfo = $this->checkErrorD('发布失败,取消推广房源'.$id.'为当天发布的房源。','请稍后再推3',$this->errInfo);
+							return false;
+						}*/
+						if($this->actionUpDown('','cancel',$id))
+						{
+							$this->errInfo .= '|CL:'.$id.'|';
+							return true;
+						}
+						$this->errInfo .= '|B|';
+						break;
+					}else
+						$this->errInfo .= '|C|';
+				}
+			}else
+				$this->errInfo .= '|D|';
+			if(strstr($this->content,'暂无房源展示'))
+				$this->errInfo = $this->checkErrorD('发布失败,该类别中暂无可下架房源,请进行手动下架房源。','请稍后再推13',$this->errInfo);
+			else
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推3',$this->errInfo);
+			return false;
+		}
+		return true;
+	}
+ 	public function checkWord()
+	{
+		$tmp = $this->patten;
+		$topic = $this->data[$this->dataid]['Topic'];
+		$tmp_arr_r = array('【】','认证','楼王','爱屋吉屋','绝对','最低','麦田','优房','真房','。','MT在线','认证','金城阜业 置业首选','100%','最后','奢侈','链家房源，如你所见','蕞','真价','尚城','如你所见',
+		'大唐','桥梁','绝版','最大','独一无二','21世纪','爱屋吉屋高效买房','绝无仅有','NO.1','301医院','回报','我爱我家 全优房源','中原','爱屋吉屋 高效买房','我爱我家','丽兹行',
+		'瑞阳','链家','爱屋','悟空找房','最','佣金0.5%','金牌','Q房网','用金','吉屋','《在线》','鼎诚安家','鼎诚','极致','佣金减半','义和','顺驰','满堂红','合富','至尊',
+		'最具','顺心','史无前例','人民币','统战部','家家顺','美联','家家顺地产','麥田','龙筑地产','尚家','顶尖','最高','真實房源','首个','极品','联众聚焦房','代办','好旺角',
+		'冠军','MaiTian在线','鼎家','导航','上海后花园','德祐','恒洋地产优质房源','世界级','常委','中广','瑞家','国大','零佣金','房天下','联众','5i5j','乐天堂','国家级',
+		'终极','权威','首席','市长','237万','Q房','广发','安鑫','吉泰地产','中联','住总新远 诚信房源','住总新远','首家','思源地产','Qfang','真实房源 如您所见','房通网','恒洋地产'
+		,'宝原','神山','投資','齐鲁楼市','佣金仅0.5','思源','求购','手抢','iwjw','景临','思源地產','枪','吉家','住商不动产','搜房','太平洋','娱乐城','麦 田',
+		'麦//田在线','麦//田房产',
+		);
+		$topic = str_replace($tmp_arr_r,'',$topic);
+		$url = "http://vip.58ganji.com/ajax/house/illegal/?kw=".urlencode($topic);
+		$this->methodGet($url,$tmp['encoding']) ;
+		$tmp_content = substr(strstr($this->content,"\r\n\r\n") , 4);
+		$tmp_arr = json_decode($tmp_content,true);
+		if(!empty($tmp_arr['details']))
+		{
+			foreach ($tmp_arr['details'] as $val)
+			{
+				$this->errInfo .= '|敏感词：'.$val['keyword'].'|';
+				if($val['keyword'] == '金城阜业置业首选')$val['keyword'] = '金城阜业 置业首选';
+				$topic = str_replace($val['keyword'],'',$topic);
+			}
+		}
+		$topic = str_replace('《》','',$topic);
+		$this->data[$this->dataid]['Topic'] = $topic;
+		return true;
+	}
+ 	private function getform()
+	{
+		/*初始化区域街道信息*/
+		$this->checkZoneStreet();
+		$zone = $this->zoneinfo;
+		$street = $this->streetinfo;
+		
+		$tmp = $this->patten;
+		$pData = $this->data[$this->dataid] ;
+		if($pData['dataType'] == 'new')$pData['dataType'] = 'second_sale';
+		$rData = $this->tmpfield;
+		$patName = $pData['dataType'];
+		$this->wuba_CommId = '';
+		$this->url = '';
+		if($patName == 'rent')
+			$type = $pData['Type4Property2'];
+		else
+			$type = $pData['Type4Property'];
+		$this->type = $type;
+		if($this->city == 1 && strstr($pData['Community'],'北苑家园'))
+		{
+			$pData['Community'] = '北苑家园(朝阳)';
+		}
+		if($this->city == 2 && strstr($pData['Community'],'祈福新村'))
+		{
+			$pData['Community'] = str_replace('村','邨',$pData['Community']);
+		}
+		if(in_array($type,array(13,14,17,18,99)))
+		{ 
+			$this->url = 'http://vip.58ganji.com/house/publish/factory/?jpChooseType=3&chooseWeb%5B%5D=2';
+			$rData['address58'] = $pData['Community'];
+			$rData['location58'] = mb_substr($pData['Address'] , 0 , 12 , 'utf-8');
+			$this->methodGetMD($this->url,$tmp['encoding']) ;
+		}elseif($type == 11) // 商铺
+		{
+			$this->url = 'http://vip.58ganji.com/house/publish/shop/?jpChooseType=2&chooseWeb%5B%5D=2';
+			$rData['address58'] = $pData['Community'];
+			$rData['location58'] = mb_substr($pData['Address'] , 0 , 12 , 'utf-8');
+			$this->methodGetMD($this->url,$tmp['encoding']) ;
+		}elseif($type == 12) // 写字楼
+		{
+			$this->url = 'http://vip.58ganji.com/house/publish/office/?jpChooseType=1&chooseWeb%5B%5D=2';
+			$rData['office58'] = $pData['Community'];
+			if($this->city ==4 && !empty($pData['CommunityAlias']))
+				$rData['office58'] = mb_substr($pData['CommunityAlias'],0,12,'utf-8');
+			$rData['address58'] = mb_substr($pData['Address'] , 0 , 12 , 'utf-8');
+			$rData['location58'] = $zone.$street;
+			$this->methodGetMD($this->url,$tmp['encoding']) ;
+		}else
+		{
+			$tmp_arr_result = array();
+			$this->url = ($patName == 'rent')?'http://vip.58ganji.com/house/publish/rent/?chooseWeb%5B%5D=2':'http://vip.58ganji.com/house/publish/ershou/?chooseWeb%5B%5D=2';
+			$this->methodGetMD($this->url,$tmp['encoding']) ;
+			$tmpadd_content = $this->content;
+			if(preg_match('#name="zone58"(.*)</select#isU',$tmpadd_content,$view) > 0)
+			{
+				if(preg_match_all('#value="(\d+)">([^<]*)<#isU',$tmpadd_content,$view2))
+					$zone58arr = $view2;
+				else
+					$this->errInfo .= '|ZE|';
+			}
+			$uCommunity = urlencode($pData['Community']);
+			$this->methodGet('http://vip.58ganji.com/ajax/community/58search/?q='.$uCommunity,$tmp['encoding']);
+			$tmp_content = substr(strstr($this->content,"\r\n\r\n") , 4);
+			$tmp_arr = json_decode($tmp_content,true);
+			$tmparr58 = array();
+			foreach($tmp_arr['data'] as $k=>$v)
+			{
+				if($v['name'] == $pData['Community'])
+				{
+					if(strstr($pData['Address'],$v['address']) || $zone58arr[2][array_search($v['districtId'],$zone58arr[1])] == $zone)//针对不同区域小区名称相同
+					{
+						$tmp_arr_result = $v;
+						break;
+					}else
+						$tmparr58[] = $v;
+				}
+			}
+			if(empty($tmp_arr_result) && !empty($tmparr58))
+			{
+				$tmp_arr_result = $tmparr58[0];
+			}
+			/*if(empty($tmp_arr_result))
+			{
+				$tmp_arr_result = $tmp_arr['data'][0];
+				similar_text($pData['Community'] , $tmp_arr_result['name'] , $m) ;
+				if($m < 60)$tmp_arr_result = '';
+			}
+			$tmp_arr_result = '';//不模糊匹配，直接支持手动录入*/
+			if(!empty($tmp_arr_result['name']) && $this->WID != 4389990)
+			{
+				$this->errInfo .= '|CC|';
+				$rData['wuba_CommId'] = $tmp_arr_result['id'];
+				$rData['community58'] = $tmp_arr_result['name'];
+				$rData['address58'] = mb_substr($tmp_arr_result['address'],0,25,'utf-8');
+				$rData['zone58'] = $tmp_arr_result['districtId'];
+				$rData['biz58'] = $tmp_arr_result['blockId'];
+				if($this->city == 1)
+				{
+					if($pData['Community'] == '博雅园')
+					{
+						$rData['wuba_CommId'] = '1233';
+						$rData['community58'] = '博雅园';
+						$rData['address58'] = '朝阳农展馆南路8号';
+						$rData['zone58'] = '1142';
+						$rData['biz58']  = '5999';
+					}
+					if((($pData['Community'] == '温泉花园' || $pData['Community'] == '温泉花园A区' || $pData['Community'] == '温泉花园B区')) && $zone == '昌平' )
+					{
+						$rData['wuba_CommId'] = '420';
+						$rData['community58'] = '温泉花园';
+						$rData['address58'] = '立汤路';
+						$rData['zone58'] = '1150';
+						$rData['biz58']  = '5833';
+					}
+				}
+				if($this->city == 2)
+				{
+					if($pData['Community'] == '金碧新城' && $zone = '白云')
+					{
+						$rData['wuba_CommId'] = '11443';
+						$rData['community58'] = '金碧新城';
+						$rData['address58'] = '石槎路';
+						$rData['zone58'] = '1659';
+						$rData['biz58']  = '6419';
+					}
+					if($pData['Community'] == '万科金色梦想')
+					{
+						$rData['wuba_CommId'] = '655871';
+						$rData['community58'] = '万科金色梦想';
+						$rData['address58'] = '开源大道';
+						$rData['zone58'] = '6547';
+						$rData['biz58']  = '6551';
+					}
+				}
+				if($this->city == 3)
+				{
+					if($pData['Community'] == '紫荆花园' && $zone = '罗湖')
+					{
+						$rData['wuba_CommId'] = '2601';
+						$rData['community58'] = '紫荆花园';
+						$rData['address58'] = '金稻田路';
+						$rData['zone58'] = '1810';
+						$rData['biz58']  = '2677';
+					}
+					if($pData['Community'] == '比华利山庄' && $zone = '罗湖')
+					{
+						$rData['wuba_CommId'] = '12660';
+						$rData['community58'] = '比华利山庄';
+						$rData['address58'] = '金稻田路';
+						$rData['zone58'] = '1810';
+						$rData['biz58']  = '2677';
+					}
+				}
+				if($this->city == 5)
+				{
+					if($pData['Community'] == '竹园新村' && $zone == '浦东')
+					{
+						$rData['wuba_CommId'] = '2364';
+						$rData['community58'] = '竹园新村浦东';
+						$rData['address58'] = '潍坊路335弄';
+						$rData['zone58'] = '1411';
+						$rData['biz58']  = '2643';
+					}
+					if($pData['Community'] == '牡丹新村' && $zone == '闵行')
+					{
+						$rData['wuba_CommId'] = '12222';
+						$rData['community58'] = '牡丹新村';
+						$rData['address58'] = '七莘路2999弄';
+						$rData['zone58'] = '6980';
+						$rData['biz58']  = '6179';
+					}
+					if($pData['Community'] == '中邦大都会')
+					{
+						$rData['wuba_CommId'] = '2042293';
+						$rData['community58'] = '中邦大都会';
+						$rData['address58'] = '秀沿路867号';
+						$rData['zone58'] = '1411';
+						$rData['biz58']  = '6223';
+					}
+				}
+				/*小区缓存如表*/
+				$Wcontent = $tmp_arr_result;
+				$check_ommutiy_arr = array(
+					'Tname'=>$pData['Community'],
+					'Wname'=>$rData['community58'],
+					'Sid'=>$this->site[$this->siteid]['wid'],
+					'Type'=>($pData['dataType'] == 'rent')?3:6,
+					'HouseType'=>($pData['dataType'] == 'rent')?$pData['Type4Property2']:$pData['Type4Property'],
+					'Msg'=>'U:'.$this->user['uid'].',W:'.$this->site[$this->siteid]['id'].',P:'.$pData['ID'].',B',
+					'Wcontent'=>$Wcontent,
+				);			
+				$this->checkWebCommityInfod($check_ommutiy_arr);		
+				/*--end---*/
+			}else
+			{
+				$this->errInfo .= '|DD|';
+				$rData['community58'] = $pData['Community'];
+				$rData['address58'] = mb_substr($pData['Address'],0,25,'utf-8');
+			}
+			$this->tmp_community_name = $rData['community58'];
+			$this->content = $tmpadd_content ;
+		}
+		if(!strstr($this->content,'房源编号'))
+		{
+			$tmpc = urldecode($this->content);
+			if(strstr($tmpc,'禁发房源'))
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,您的账号因多次违规,被禁发房源。','|'.$this->user['Company1'].'|',$this->errInfo);
+				$this->errInfoStatus = 1;
+			}else
+			{
+				$this->errInfo .= 'P:'.$this->tmpip_d2.'|';
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推3!',$this->errInfo);
+				$this->falseStatus = 1 ;
+			}
+			return false;
+		}
+		/*发布页面附属页面*/
+		$tmp_content_old = $this->content;
+		$this->methodGetMD('http://include.anjukestatic.com/broker-vip/res/20172404/b/'.$this->sanjuke_p2.'.css',$tmp['encoding']);
+		$this->methodGetMD('http://include.anjukestatic.com/broker-vip/res/20172404/b/'.$this->sanjuke_p2.'.js',$tmp['encoding']);
+		$guid = $this->getCookieValue('aQQ_brokerguid');
+		$ssid = $this->getCookieValue('sessid');
+		$tmp_uid = $this->getCookieValue('ajk_broker_uid');
+		$luid = $this->getCookieValue('lui');//$this->getCookieValue('lui');
+		$tcontent = 't='.time().mt_rand(111,999).'&site=broker&plat=1&type=1&p='.$this->sanjuke_p.'&pn=&action=&r=&sc=%7B%22w%22%3A%221823%22%2C%22h%22%3A%22141%22%2C%22r%22%3A%220%22%7D&h='.urlencode($this->url).'&cp=&guid='.$guid.'&ctid='.$this->CitysID_1.'&luid='.$luid.'&ssid='.$ssid.'&uid='.$tmp_uid;
+		$this->methodPostMD('http://s.anjuke.com/stb?__site=anjuke&',$tcontent,$tmp['encoding']);
+		$this->methodGetMD('http://vip.58ganji.com/ajax/getmessage/?r=0.2006648518575'.mt_rand(1111,9999),$tmp['encoding']);
+		$this->methodGetMD('http://vip.58ganji.com/ajax/house/templatenew/?action=list',$tmp['encoding']);
+		$this->content = $tmp_content_old;
+		/*---end---*/
+		
+		/*获取隐藏变量*/
+		if(preg_match_all('/name="([^>]*)" type="hidden" value="([^>]*)"/isU',$this->content,$view))	
+		{
+			foreach($view[1] as $key=>$value )
+			{
+				if(!empty($rData['wuba_CommId']))
+				{
+					if($value == 'wuba_CommId')continue;
+				}
+				$rData[$value] = $view[2][$key];
+			}
+		}
+		/*获取单位、参数*/
+		if($patName == 'rent' && $this->type >= 11)
+		{
+			$this->groupname = '';
+			if(preg_match('/租金：.*name="(.*)"/isU',$this->content , $view))
+				$this->groupname = $view[1];
+			if(preg_match('/name="rentUnit"\s*value="([^>]*)"/isU',$this->content,$view))	
+				$rData['rentUnit'] = $view[1];
+		}
+		
+		/*替换使用*/
+		$this->loginsign_first_is = 'no';
+		$now_time_d = time();
+		$char_time_d = 0;
+		$time_mant_rand = mt_rand(1380,1800);
+		if(!empty($this->loginsign_time))
+		{
+			$char_time_d = $now_time_d-$this->loginsign_time;
+		}else
+			$this->loginsign_time = time();
+		if(empty($this->loginsign) || empty($this->tmpsiginfo) || $char_time_d>$time_mant_rand || 1==1)
+		{
+			preg_match("/input.name\s*=\s*'([^']*)'/",$this->content,$view);
+			$_loginsign = $view[1];
+			$this->loginsign = $_loginsign;
+			if($this->checkloginsign($_loginsign) == false)
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再试1121',$this->errInfo);
+				$this->falseStatus = 1 ;
+				return false;
+			}
+			$this->errInfo .= '|HCN.t1:'.$char_time_d.'.t2:'.$time_mant_rand.'|';
+			$this->loginsign_time = time();
+			$this->loginsign_first_is = 'yes';
+			/*延时操作*/
+			/*if(!in_array($this->old_city,array(1,5,3,10,11,)))
+			{
+				$mt_rand = mt_rand(60,70);
+				$this->errInfo .= "|S:".$mt_rand."|" ;
+				sleep($mt_rand);
+			}*/
+			/*---end----*/
+		}else
+			$this->errInfo .= '|HCY.t1:'.$char_time_d.'.t2:'.$time_mant_rand.'|';
+		$rData[$this->loginsign] = $this->tmpsiginfo;
+		/*----end-----*/
+		
+		
+		$this->tmp_content_d = $this->tmpsiginfo."\r\n".$this->content;
+		/*判断用户姓名、手机*/
+		preg_match("/'phone58':'(.*)'.*'contact58':'(.*)'/isU", $this->content , $user_arr);
+		if(!empty($user_arr[1]) && !empty($user_arr[2]))
+		{
+			$contact58 = trim($user_arr[2]);
+			$contact58 = preg_replace("/\s+/",'',$contact58); 
+			$contact58 = str_replace(array("\xe3\x80\x80","\xc2\xa0"),'',$contact58);//特殊字符的替换
+			$rData['phone58'] = $user_arr[1];
+			$rData['contact58'] = $contact58;
+		}else
+		{
+			$rData['phone58'] = $pData['ContactMobile'];
+			$rData['contact58'] = $pData['Contact'];
+		}
+		/*******end**********/
+		if($this->city == 24 && $this->WID == 1373447)
+		{
+			$rData['zone58'] = '';
+			$rData['biz58'] = '';
+		}
+		if(!empty($rData['zone58']) && !strstr($this->content,'value="'.$rData['zone58'].'"') && $this->city == 24)
+		{
+			$this->errInfo .= '|NZ|';
+			$rData['zone58'] = '';
+			$rData['biz58'] = '';
+		}
+		if(empty($rData['biz58']))
+		{	
+			$zonearr = explode(',' , $zone);
+			$streetarr = explode(',' , $street);
+			foreach($zonearr as $zone)
+			{
+				if(preg_match('/<option\s*value="(\d+)"[^>]*>\s*'.$zone.'\s*<\/option>/isU',$this->content,$view)) 
+				{
+					$rData['zone58'] = $view[1];
+					$this->methodGet("http://vip.58ganji.com/ajax/search/business/?site=58&districtId=".$rData['zone58'],$tmp['encoding']);
+					$tmp_content = substr(strstr($this->content,"\r\n\r\n") , 4);
+					$tmp_arr = json_decode($tmp_content,true);
+					$tmp_arr_result = $tmp_arr['data'];
+					if(empty($tmp_arr_result))
+					{
+						$this->errInfo .= '发布失败,没有找到对应街道:'.$street.$tmp['city'];
+						return FALSE;
+					}
+					foreach($streetarr as $street)
+					{ 
+						foreach ($tmp_arr_result as $sval)
+						{
+							if($sval['value'] == $street)
+							{
+								$rData['biz58'] = $sval['key'];
+								$rData['block58'] = $sval['key'];
+								break 3;
+							}
+						}
+						foreach ($tmp_arr_result as $sval)
+						{
+							if(strstr($sval['value'],$street) || strstr($street,$sval['value']))
+							{
+								$rData['biz58'] = $sval['key'];
+								$rData['block58'] = $sval['key'];
+								break 3;
+							}
+							if(strstr($sval['value'],$zone.'周边'))
+							{
+								$biz58_zb = $sval['key'];
+								$block58_zb = $sval['key'];
+							}
+						}
+					}
+				}
+			}
+		}
+		if($street == '回龙观')$rData['biz58'] = 2640;
+	    if($street == '广渠门' && $zone == '崇文')$rData['biz58'] = 6062;
+		if($street == '深圳周边')$rData['biz58'] = 2665;
+		if($street == '泡崖')$rData['biz58'] = 11011;
+		if($this->city == 5)
+		{
+			if($street =='植物园' )$rData['biz58'] = 2647;
+		}
+		if($this->old_city == 101)
+		{
+			if($rData['zone58'] == '' || $rData['biz58'] == '')
+			{
+				$rData['zone58'] = '1940';//嘉兴周边
+				$rData['biz58'] = '5374';//其他
+			}
+		}
+		if($rData['zone58'] == '')
+		{
+			if(strstr($this->content , '您没有该网邻通发帖权限'))
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,该账号不支持发布此频道。','不支持发布此频道1',$this->errInfo);
+				//$this->deleteOldCookie($this->WID);//有可能cookies已失效
+				$this->errInfoStatus = 1;
+				return FALSE;
+			}
+			if(strstr($this->content , '非法用户') || strstr($this->content , '法获取网邻通信'))
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,此账号未付费是免费账号。','',$this->errInfo);
+				$this->errInfoStatus = 1;
+			}else
+			{
+				$this->errInfo .= '发布失败,没有找到对应区域:'.$zone.$tmp['city'];
+			}
+			$this->content .= $this->url;
+			return FALSE;
+		}
+		if($rData['biz58'] == '')
+		{
+			if(!empty($biz58_zb))
+			{
+				$rData['biz58'] = $biz58_zb;
+				$rData['block58'] = $block58_zb;
+			}else
+			{
+				$this->errInfo .= '发布失败,没有找到对应街道2:'.$street.$tmp['city'];
+				return FALSE;
+			}
+		}
+		$this->wuba_CommId = $rData['wuba_CommId'];
+		$this->tmpfield = $rData;
+		return TRUE ;
+	}
+ 	private function getform2()
+	{
+		/*初始化区域街道信息*/
+		$this->checkZoneStreet();
+		$zone = $this->zoneinfo;
+		$street = $this->streetinfo;
+		$tmp = $this->patten;
+		if($tmp['cityName'] == 'lf')return $this->getform();
+		$pData = $this->data[$this->dataid] ;
+		if($pData['dataType'] == 'new')$pData['dataType'] = 'second_sale';
+		$community_unite_id = '';
+		$rData = $this->tmpfield ;
+		$patName = $pData['dataType'] ;
+		if($patName == 'rent')
+			$type = $pData['Type4Property2'];
+		else
+			$type = $pData['Type4Property'];
+		$this->type = $type;
+		$this->wuba_CommId = '';
+		if($this->city == 1)
+		{
+			if($zone == '昌平' && $pData['Community'] == '永安里小区')$pData['Community'] = '永安里小区(昌平)';
+		}
+		if($this->city == 11)
+		{
+			if($pData['Community'] == '新华小区' && $zone == '西岗')$pData['Community'] = '大连新华小区';
+		}
+		if($this->city == 2 && strstr($pData['Community'],'祈福新村'))
+		{
+			$pData['Community'] = str_replace('村','邨',$pData['Community']);
+		}
+		if(in_array($type,array(13,14,17,18,99)))
+		{ 
+			$this->url = 'http://vip.58ganji.com/house/publish/factory/?jpChooseType=3&chooseWeb%5B%5D=2';
+			$rData['address58'] = $pData['Community'];
+			$rData['location58'] = mb_substr($pData['Address'] , 0 , 12 , 'utf-8');
+			$this->methodGetMD($this->url,$tmp['encoding']) ;
+		}elseif($type == 11) // 商铺
+		{
+			$this->url = 'http://vip.58ganji.com/house/publish/shop/?jpChooseType=2&chooseWeb%5B%5D=2';
+			$rData['address58'] = $pData['Community'];
+			$rData['location58'] = mb_substr($pData['Address'] , 0 , 12 , 'utf-8');
+			$this->methodGetMD($this->url,$tmp['encoding']) ;
+		}elseif($type == 12) // 写字楼
+		{
+			$this->url = 'http://vip.58ganji.com/house/publish/office/?jpChooseType=1&chooseWeb%5B%5D=2';
+			$rData['office58'] = $pData['Community'];
+			$rData['address58'] = $pData['Community'];
+			if($this->city ==4 && !empty($pData['CommunityAlias']))
+				$rData['address58'] = mb_substr($pData['CommunityAlias'],0,12,'utf-8');
+			$rData['location58'] = mb_substr($pData['Address'] , 0 , 12 , 'utf-8');
+			$this->methodGetMD($this->url,$tmp['encoding']) ;
+		}else
+		{
+			if($pData['dataType'] == 'rent')
+				$this->url = 'http://vip.58ganji.com/house/publish/rent/?chooseWeb%5B%5D=2' ;
+			else
+				$this->url = 'http://vip.58ganji.com/house/publish/ershou/?chooseWeb%5B%5D=2';
+			$sArray = getArray($pData['Community']);//小区名称
+			while(!empty($sArray))
+			{
+				$k_d = count($sArray);
+				$string = '' ;
+				foreach($sArray as $i =>$key)
+					$string = $string.$key ;
+				unset($sArray[$i]) ;
+				$uCommunity = urlencode($string);
+				$posturl = "http://vip.58ganji.com/ajax/community/unity/?type=esf&q=".$uCommunity;
+				$this->methodGet($posturl,$tmp['encoding']);
+				$tmp_content = substr(strstr($this->content,"\r\n\r\n") , 4);
+				$tmp_arr = json_decode($tmp_content,true);
+				$tmp_arr_result = $tmp_arr['data'];
+				if(!empty($tmp_arr_result))
+				{
+					$narr1 = array() ;
+					foreach($tmp_arr_result as $k => $val)
+					{
+						similar_text($pData['Community'] , $val['name'] , $m) ;
+						if(isset($val['wb_id']))
+						{
+							$ret1=$this->methodGet('http://vip.anjuke.com/ajax/community/unityInfo/?type=esf&uid='.$val['id'],$tmp['encoding']) ;
+							$ret1 = substr(strstr($ret1,"\r\n\r\n") , 4);
+							$ret1 = json_decode($ret1,true);
+							if($ret1['data']['area_string_58'] == $zone)$m = $m+1;//针对不同区域小区名称相同
+						}
+						$narr1[$k] = $m ;
+					}
+					$count = 0 ; 
+					$value = 0 ;
+					foreach($narr1 as $i_d => $y)
+					{
+						if($y > $value)
+						{
+							$count = $i_d ; 
+							$value = $y ;
+						}
+					}
+					if($value > 60)
+					{
+						$rData['wuba_CommId'] = $tmp_arr_result[$count]['wb_id'];
+						$rData['community58'] = $tmp_arr_result[$count]['name'];
+						$rData['address58'] = $tmp_arr_result[$count]['address'];
+						$rData['zone58'] = $tmp_arr_result[$count]['districtId'];
+						$rData['biz58'] = $tmp_arr_result[$count]['blockId'];
+						$community_unite_id = $tmp_arr_result[$count]['id'];
+						if($this->city == 1)
+						{
+							if($pData['Community'] == '博雅园')
+							{
+								$rData['wuba_CommId'] = '1233';
+								$rData['community58'] = '博雅园';
+								$rData['address58'] = '朝阳农展馆南路8号';
+								$rData['zone58'] = '1142';
+								$rData['biz58']  = '5999';
+							}
+							if($pData['Community'] == '温泉花园')
+							{
+								$rData['wuba_CommId'] = '420';
+								$rData['community58'] = '温泉花园';
+								$rData['address58'] = '建设大街';
+								$rData['zone58'] = '1150';
+								$rData['biz58']  = '5833';
+							}
+							if($pData['Community'] == '龙泉花园' && $zone == '门头沟')
+							{
+								$rData['wuba_CommId'] = '13589';
+								$rData['community58'] = '龙泉花园';
+								$rData['address58'] = '滨河路';
+								$rData['zone58'] = '1029';
+								$rData['biz58']  = '100662';
+								$community_unite_id = '100399467';
+							}
+							if($pData['Community'] == '万年花城')
+							{
+								$rData['wuba_CommId'] = '1751';
+								$rData['community58'] = '万年花城';
+								$rData['address58'] = '首经贸北路8号';
+								$rData['zone58'] = '1026';
+								$rData['biz58']  = '100835';
+								$community_unite_id = '100403297';
+							}
+						}
+						if($this->city == 2)
+						{
+							if($pData['Community'] == '雅居乐剑桥郡' && $zone == '番禺')
+							{
+								$rData['wuba_CommId'] = '495204';
+								$rData['community58'] = '雅居乐剑桥郡';
+								$rData['address58'] = '南大路';
+								$rData['zone58'] = '1522';
+								$rData['biz58']  = '101979';
+								$community_unite_id = '100453670';
+							}
+						}
+						if($this->city == 3)
+						{
+							if($pData['Community'] == '紫荆花园' && $zone == '罗湖')
+							{
+								$rData['wuba_CommId'] = '2601';
+								$rData['community58'] = '紫荆花园';
+								$rData['address58'] = '金稻田路';
+								$rData['zone58'] = '1810';
+								$rData['biz58']  = '2677';
+							}
+							if($pData['Community'] == '比华利山庄' && $zone == '罗湖')
+							{
+								$rData['wuba_CommId'] = '12660';
+								$rData['community58'] = '比华利山庄';
+								$rData['address58'] = '金稻田路';
+								$rData['zone58'] = '1810';
+								$rData['biz58']  = '2677';
+							}
+						}
+						$this->tmp_community_name = $rData['community58'];
+						
+						/*小区缓存如表*/
+						$Wcontent = $tmp_arr_result[$count];
+						$check_ommutiy_arr = array(
+							'Tname'=>$pData['Community'],
+							'Wname'=>$rData['community58'],
+							'Sid'=>$this->site[$this->siteid]['wid'],
+							'Type'=>($pData['dataType'] == 'rent')?3:6,
+							'HouseType'=>($pData['dataType'] == 'rent')?$pData['Type4Property2']:$pData['Type4Property'],
+							'Msg'=>'U:'.$this->user['uid'].',W:'.$this->site[$this->siteid]['id'].',P:'.$pData['ID'].',A',
+							'Wcontent'=>$Wcontent,
+						);			
+						$this->checkWebCommityInfod($check_ommutiy_arr);		
+						/*--end---*/
+						break;
+					}
+				}
+				if($k_d==2)
+				{
+					$this->errInfo = $this->checkErrorD('发布失败,没有找到对应小区:'.$pData['Community'].'。','小区1',$this->errInfo);
+					return FALSE;
+				}
+			}
+			$this->methodGetMD($this->url,$tmp['encoding']);
+		}
+		if(!strstr($this->content,'房源编号'))
+		{
+			$tmpc = urldecode($this->content);
+			if(strstr($tmpc,'禁发房源'))
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,您的账号因多次违规,被禁发房源。','|'.$this->user['Company1'].'|',$this->errInfo);
+				$this->errInfoStatus = 1;
+			}else
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再推3!',$this->errInfo);
+				$this->falseStatus = 1 ;
+			};
+			return false;
+		}
+		
+		/*发布页面附属页面*/
+		$tmp_content_old = $this->content;
+		$this->methodGetMD('http://include.anjukestatic.com/broker-vip/res/20172404/b/'.$this->sanjuke_p2.'.css',$tmp['encoding']);
+		$this->methodGetMD('http://include.anjukestatic.com/broker-vip/res/20172404/b/'.$this->sanjuke_p2.'.js',$tmp['encoding']);
+		$guid = $this->getCookieValue('aQQ_brokerguid');
+		$ssid = $this->getCookieValue('sessid');
+		$tmp_uid = $this->getCookieValue('ajk_broker_uid');
+		$luid = $this->getCookieValue('lui');//$this->getCookieValue('lui');
+		$tcontent = 't='.time().mt_rand(111,999).'&site=broker&plat=1&type=1&p='.$this->sanjuke_p.'&pn=&action=&r=&sc=%7B%22w%22%3A%221823%22%2C%22h%22%3A%22141%22%2C%22r%22%3A%220%22%7D&h='.urlencode($this->url).'&cp=&guid='.$guid.'&ctid='.$this->CitysID_1.'&luid='.$luid.'&ssid='.$ssid.'&uid='.$tmp_uid;
+		$this->methodPostMD('http://s.anjuke.com/stb?__site=anjuke&',$tcontent,$tmp['encoding']);
+		$this->methodGetMD('http://vip.58ganji.com/ajax/getmessage/?r=0.2006648518575'.mt_rand(1111,9999),$tmp['encoding']);
+		$this->methodGetMD('http://vip.58ganji.com/ajax/house/templatenew/?action=list',$tmp['encoding']);
+		$this->content = $tmp_content_old;
+		/*---end---*/
+		
+		/*获取隐藏变量*/
+		if(preg_match_all('/name="([^>]*)" type="hidden" value="([^>]*)"/isU',$this->content,$view))	
+		{
+			foreach($view[1] as $key=>$value )
+			{
+				if($value != 'wuba_CommId')
+					$rData[$value] = $view[2][$key];
+			}
+		}
+		/*判断用户姓名、手机*/
+		preg_match("/'phone58':'(.*)'.*'contact58':'(.*)'/isU", $this->content , $user_arr);
+		if(!empty($user_arr[1]) && !empty($user_arr[2]))
+		{
+			$contact58 = trim($user_arr[2]);
+			$contact58 = preg_replace("/\s+/",'',$contact58); 
+			$contact58 = str_replace(array("\xe3\x80\x80","\xc2\xa0"),'',$contact58);//特殊字符的替换
+			$rData['phone58'] = $user_arr[1];
+			$rData['contact58'] = $contact58;
+		}else
+		{
+			$rData['phone58'] = $pData['ContactMobile'];
+			$rData['contact58'] = $pData['Contact'];
+		}
+		/*******end**********/
+		
+		/*替换使用*/
+		$this->loginsign_first_is = 'no';
+		$now_time_d = time();
+		$char_time_d = 0;
+		$time_mant_rand = mt_rand(1380,1800);
+		if(!empty($this->loginsign_time))
+		{
+			$char_time_d = $now_time_d-$this->loginsign_time;
+		}else
+			$this->loginsign_time = time();
+		if(empty($this->loginsign) || empty($this->tmpsiginfo) || $char_time_d>$time_mant_rand || 1==1)
+		{
+			preg_match("/input.name\s*=\s*'([^']*)'/",$this->content,$view);
+			$_loginsign = $view[1];
+			$this->loginsign = $_loginsign;
+			if($this->checkloginsign($_loginsign) == false)
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','请稍后再试1121',$this->errInfo);
+				$this->falseStatus = 1 ;
+				return false;
+			}
+			$this->errInfo .= '|HCN.t1:'.$char_time_d.'.t2:'.$time_mant_rand.'|';
+			$this->loginsign_time = time();
+			$this->loginsign_first_is = 'yes';
+			/*延时操作*/
+			/*if(!in_array($this->old_city,array(1,5,3,10,11,)))
+			{
+				$mt_rand = mt_rand(60,70);
+				$this->errInfo .= "|S2:".$mt_rand."|" ;
+				sleep($mt_rand);
+			}*/
+			/*---end----*/
+		}else
+			$this->errInfo .= '|HCY.t1:'.$char_time_d.'.t2:'.$time_mant_rand.'|';
+		$rData[$this->loginsign] = $this->tmpsiginfo;
+		/*----end-----*/
+		
+		
+		$this->tmp_content_d = $this->tmpsiginfo."\r\n".$this->content;
+		if(empty($rData['biz58']) && $rData['biz58'] != '0')
+		{	
+			$zonearr = explode(',' , $zone);
+			$streetarr = explode(',' , $street);
+			foreach($zonearr as $zone)
+			{
+				if(preg_match('/<option\s*value="(\d+)"[^>]*>\s*'.$zone.'\s*<\/option>/isU',$this->content,$view)) 
+				{
+					$rData['zone58'] = $view[1];
+					$this->methodGet("http://vip.58ganji.com/ajax/search/business/?site=58&districtId=".$rData['zone58'],$tmp['encoding']);
+					$tmp_content = substr(strstr($this->content,"\r\n\r\n") , 4);
+					$tmp_arr = json_decode($tmp_content,true);
+					$tmp_arr_result = $tmp_arr['data'];
+					if(empty($tmp_arr_result))
+					{
+						$this->errInfo .= '发布失败,没有找到对应街道:'.$street.$tmp['city'];
+						return FALSE;
+					}
+					foreach($streetarr as $street)
+					{ 
+						foreach ($tmp_arr_result as $sval)
+						{
+							if(strstr($sval['value'],$street) || strstr($street,$sval['value']))
+							{
+								$rData['biz58'] = $sval['key'];
+								$rData['block58'] = $sval['key'];
+								break 3;
+							}
+						}
+					}
+				}
+			}
+		}
+		if($street == '回龙观')$rData['biz58'] = 2640;
+	    if($street == '广渠门' && $zone == '崇文')$rData['biz58'] = 6062;
+		if($street == '深圳周边')$rData['biz58'] = 2665;
+		if($street == '泡崖')$rData['biz58'] = 11011;
+		if($this->city == 5)
+		{
+			if($street =='植物园' )$rData['biz58'] = 2647;
+		}
+		if($rData['zone58'] === '')
+		{
+			if(strstr($this->content , '您没有该网邻通发帖权限'))
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,该账号不支持发布此频道。','不支持发布此频道1',$this->errInfo);
+				//$this->deleteOldCookie($this->WID);//有可能cookies已失效
+				$this->errInfoStatus = 1;
+				return FALSE;
+			}
+			if(strstr($this->content , '非法用户') || strstr($this->content , '法获取网邻通信'))
+			{
+				$this->errInfo = $this->checkErrorD('发布失败,此账号未付费是免费账号。','',$this->errInfo);
+				$this->errInfoStatus = 1;
+			}else
+			{
+				$this->errInfo .= '发布失败,没有找到对应区域:'.$zone.$tmp['city'];
+			}
+			$this->content .= $this->url;
+			return FALSE;
+		}
+		if(empty($rData['biz58']) && $rData['biz58'] != '0')
+		{
+			if(!empty($biz58_zb))
+			{
+				$rData['biz58'] = $biz58_zb;
+				$rData['block58'] = $block58_zb;
+			}else
+			{
+				$this->errInfo .= '发布失败,没有找到对应街道2:'.$street.$tmp['city'];
+				return FALSE;
+			}
+		}
+		if(!empty($community_unite_id))
+		{	
+			$rData['community_unite_id'] = $community_unite_id;
+			$this->wuba_CommId = $rData['wuba_CommId'];
+			unset($rData['zone58']);
+			unset($rData['biz58']);
+			unset($rData['address58']);
+			unset($rData['wuba_CommId']);
+			$rData['community_unite'] = $rData['community58'];
+			unset($rData['community58']);
+		}
+		$this->tmpfield = $rData;
+		return TRUE ;
+	}
+ 	public function check_price()
+	{
+		$tmp = $this->patten;
+		$pData = $this->data[$this->dataid] ;
+		$rData = $this->tmpfield ;
+		$Type4Property = $pData['Type4Property'];
+		$squre = $pData['Square'];
+		$price = $pData['Total'];
+		if(!empty($rData['community_unite_id']))//检测面积是否合格
+		{
+			$this->errInfo .= '|MJ|';
+			$url = "http://vip.58ganji.com/communities/area/check/?type=&area={$squre}&commId=".$rData['community_unite_id'];
+			$this->methodGet($url,$tmp['encoding']);
+			$content = substr(strstr($this->content,"\r\n\r\n") , 4);
+			$tmp_arr = json_decode($content,true);
+			$tmp_arr2 = $tmp_arr['data'];
+			if($tmp_arr2['isValid'] == 0 && !empty($tmp_arr2['errorMessage']))
+			{
+				$this->errInfo = $this->checkErrorD('发布失败，不能发布面积违规房源，'.$tmp_arr2['errorMessage'].'。','',$this->errInfo);
+				return false;
+			}
+		}
+		sleep(1);
+		if(!empty($this->wuba_CommId))
+		{
+			$this->errInfo .= '|PN|';
+			$url = "http://vip.58ganji.com/ajax/community/averageprice/v2?type=58&communityId={$this->wuba_CommId}&json";
+			$this->methodGet($url,$tmp['encoding']);
+			$content = substr(strstr($this->content,"\r\n\r\n") , 4);
+			$arr_d = json_decode($content,true);
+			$arr2 = $arr_d['data'];
+			sleep(1);
+			if(!empty($arr2) || !empty($tmp_price))
+			{
+				$danjia = $arr2[8]['min'];   //最低单价（元）
+				$danjia2 = $arr2[8]['max'];   //最高单价（元）
+				$stand_price = round($danjia*$squre/10000,2);
+				if($price < $stand_price && !empty($danjia))
+				{
+					$this->errInfo = $this->checkErrorD('发布失败，不能发布低价违规房源，该小区"'.$pData['Community'].'"要求最低单价为：'.$danjia.'元，该房源最低价格为：'.$stand_price.'万。','',$this->errInfo);
+					return false;
+				}
+				$max_price = round($danjia2*$squre/10000,2);
+				if($price > $max_price && !empty($danjia2))
+				{
+					$this->errInfo = $this->checkErrorD('发布失败，价格偏离均价过大，该小区"'.$pData['Community'].'"要求最高单价为：'.$danjia2.'元，该房源最高价格为：'.$max_price.'万。','',$this->errInfo);
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+	public function checkZoneStreet()
+	{
+		$tmp = $this->patten; 
+		$pData = $this->data[$this->dataid] ;
+		if($pData['dataType'] == 'new')$pData['dataType'] = 'second_sale';
+		$zone = getPosition($tmp['city'] , 'zone' , $pData['Zone']);
+		$street = getPosition($tmp['city'] , 'street' , $pData['Zone'] , $pData['Street']);
+		if($tmp['city'] == 1)
+		{
+			/*判断该用户是否是廊坊的*/
+			$this->methodGet('http://vip.58ganji.com/broker/modify/brokerinfo',$tmp['encoding']);
+			$ceshi_co = $this->content;
+			if(strstr($this->content,"广阳</option>"))
+			{
+				$this->errInfo .= '|廊|';
+				$this->patten['urlid'] = '772';
+				$this->patten['cityName'] = 'lf';
+				$tmp= $this->patten;
+				$comunity_arr = array("金地天一城金地经典","百合尚城","金雀兴园","金雀","金地阳光","御景湾","星宸新天地","金色阳光花苑a区","花苑B区","稽征站","宏业一期","宏业小区二期","万和世家","科技局综合楼","兴达花园","圣霖","圣霖二期","农机局宿舍","港悦金督","昊业新居","工商局宿舍","老煤建宿舍","和源馨区","名人国际","丽都馨苑","一小宿舍楼","盛华园","尚品雅苑","德仁","德邻小区","鑫琳花园","锦绣","鑫鼎华庭","新地税宿舍","凯悦成","芝兰苑","鑫鼎家园","中央学府","职教中心宿舍","供电局宿舍","二中附近","天都小区","老地税宿舍","停车场","澜城花园","人行宿舍","廊坊大家新城","企业局宿舍","东方美庭","丽泰小区","龙凤祥园","农行保险社","四堡大队","逸树嘉园","鸿盛铭居","翠林堡","正圆","蓝山郡","府东街门面","百盛商城对面","德仁附近门面","金领域门面","二中附近门面","和源馨区门面","安馨丽景","百盛商城门脸","永清武隆路南段第三大街","城建局小区","武隆路丽泰花园对面","金地经典","金地经典","金雀花园小区","金色阳光花苑A区","中行宿舍","金地.天一城","凯悦城","金领域","德仁佳苑","星辰·新天地","宏业小区一期","锦绣花园","金色年华","方正英郡","锦绣家园","永清锦绣花苑","北京原著","中盛星河湾","正圆小区","永清金地阳光","金雀花园","熠荟园","永清森林新都孔雀城");
+				$comunity_arr1 = array("大运河孔雀城温莎郡");
+				$comunity_arr2 = array("永定河孔雀城大卫城","孔雀大卫城兰园","孔雀城听涛苑");
+				if($street == '香河' || in_array($pData['Community'],$comunity_arr1))
+				{
+					$zone = '香河';
+					$street = '香河';
+				}elseif($street =='固安'||$pData['Community'] =='锦绣家园')
+					$zone='固安';
+				elseif($pData['Community'] =='正圆小区')
+					$zone='廊坊';
+				elseif(in_array($pData['Community'],$comunity_arr))
+					$zone='永清';
+				elseif($pData['Community'] =='廊坊孔雀城' || $pData['Community'] =='香邑廊桥')
+					$zone='广阳';
+				elseif($pData['Community'] =='霸州温泉孔雀城')
+					$zone='霸州';
+				else
+				{
+					$zone = '燕郊';
+					$street = '城区';
+					if($pData['Community'] == '天洋城')
+						$street='迎宾路';
+					if($pData['Community'] == '上上城第三季')
+						$street='燕顺路';
+				}
+				if($street =='固安'|| $pData['Community'] =='固安方城馨苑')$street='民政局';
+				if(in_array($pData['Community'],$comunity_arr2))$street='孔雀城';
+			}else
+			{
+				if($zone =='周边')$zone = "北京周边";
+				if($street == '燕郊')$zone = '燕郊';
+				if($zone =='通州' && $street =='北苑')$street ='通州北苑';
+				if($street =='旧宫')$street = "旧宫 ";
+				if($street =='广渠门内')$street = '广渠门';
+				if($street =='广安门')
+				{
+					$street ='广安门内';				
+					if($pData['Community']=='丽水莲花' ||$pData['Community']=='蝶翠华庭' ||$pData['Community']=='红山世家')$street ='广安门外';
+				}
+				if($street =='顺义城')$street = '顺义城区';
+				if($zone=='朝阳' && $street =='亚奥')$street = '奥林匹克公园';
+				if($zone=='朝阳' && $street =='小营')$street = '亚运村小营';
+				if($zone=='朝阳' && $street =='东八里庄')$street = '八里庄';
+				if($zone == '朝阳' && $pData['Community'] == '首城国际中心')$street = '双井';
+				if($zone == '朝阳' && $pData['Community'] == '慧忠北里')$street = '亚运村';
+				if($zone == '朝阳' && $street == '华威')$street = '华威桥';
+				if($pData['Community']=='宝盛里')$pData['Community'] = '宝盛里小区';
+				//小区对应街道
+				if($pData['Community']=='嘉铭桐城')$street = '亚运村小营';
+				if($zone=='顺义' && $street =='首都机场')$street = '机场';
+				if($zone=='顺义' && $street =='空港工业区')$street = '天竺';
+				if($zone=='顺义' && $street =='顺义城')$street = '顺义城区';
+				if($zone=='顺义' && $street =='温榆河')$street = '其他';
+            }
+		}
+		/*if($this->old_city == 2 && $this->patten['city'] == 26)
+		{
+			$this->methodGet('http://vip.58ganji.com/broker/modify/brokerinfo',$tmp['encoding']);
+			$ceshi_co = $this->content;
+			if(strstr($this->content,"番禺</option>"))
+			{
+				$street = $zone;
+				$zone = '佛山';
+				$this->initializeForm($this->old_city);
+				$tmp = $this->patten;
+				$this->errInfo .= '|U|';
+			}
+		}*/
+		if($this->city ==2)
+		{
+			if($street =='市桥东' || $street =='市桥西' || $street =='市桥南' || $street =='市桥北')$street ='市桥';
+			if($street =='东川路')$street ='东川';
+			if($street =='东山')$street ='东山口';
+			if($street =='广花路')$street ='广花';
+			if($zone =='番禺' && $street =='石基')$street ='石碁';
+			if($zone =='海珠' && $street =='昌岗路')$street ='昌岗';
+			if($zone =='海珠' && $street =='江南大道')$street ='江南大道中';
+		}
+		if($this->city ==3)
+		{
+			if($zone =='惠州' || $zone =='东莞')
+			{
+				$zone ='深圳周边'; 
+				$street ='深圳周边';
+			}
+			if($pData['City'] == '14' || $pData['City'] == '24')
+			{
+				$zone ='深圳周边'; 
+				$street ='深圳周边';
+			}
+			if($zone =='龙岗')
+			{
+				$zone ='龙岗区';
+				if($street == '布吉')
+				{
+					$zone = '布吉';
+					$street = '布吉街';
+					if($pData['Community'] == '百合星城二期') $street = '布吉关';
+					if($pData['Community'] == '百合星城一期') $street = '布吉关';
+					if($pData['Community'] == '80后街') $street = '布吉关';
+				}
+			}
+			if($street == '福田中心区')$street ='中心区';
+			if($pData['Community']=='春华四季园')$zone='龙华新区';
+			if($street == '莲花' && $pData['Community']=='莲花北村')$street = '莲花北村';
+			if($street == '莲花')$street = '景田';
+			if($street=='梅林')$street='上梅林';
+			if($zone == '福田' && $street == '华强')$street = '华强南';
+			if($pData['Community'] == '御景华城' && $zone == '福田')$this->data[$this->dataid]['Community'] = '御景华城(京基御景华城)';
+		}
+		if($this->city ==4)
+		{
+			if($street =='光华')$street ='内光华';
+			if($zone =='金牛' && $street =='沙湾会展')$street ='沙湾';
+		}
+		if($this->city == 5)
+		{
+			if($street == '中原社区')$street = '中原';
+			if($street == '金杨')$street ='金杨新村';
+			if($zone == '徐汇' && $street == '康健')$street ='康建';
+			if($zone == '宝山' && $street == '上大')$street ='上海大学';
+			if($zone == '浦东新区')$zone ='浦东';
+			if(in_array($pData['Street'],array('751','752','753','754','755','756','757')))$zone ="南汇";
+			if($pData['Community']=='嘉华苑')$zone='大华路';
+			if($zone == '宝山')
+			{
+				if($street == '大华')$street ='大华路';
+			}
+			if($zone == '普陀')
+			{
+				if($street == '甘泉宜川')$street ='甘泉路';
+				if($street == '万里')$street ='万里城';
+			}
+		}
+		if($this->city == 6)
+		{
+			if($street == '邵公庄')$street='卲公庄';
+			if($street == '芥园道')$street='芥园街';
+			if($street == '南河镇')$street='南河';
+			if($street == '辛口镇')$street='辛口';
+			if($street == '中北镇')$street='中北';
+			if($street == '八里台镇')$street='八里台';
+			if($street == '北闸口镇')$street='北闸口';
+			if($street == '葛沽镇')$street='葛沽';
+			if($street == '双港镇')$street='双港';
+			if($street == '双桥河镇')$street='双桥河';
+			if($street == '咸水沽镇')$street='咸水沽';
+			if($street == '小站镇')$street='小站';
+			if($street == '辛庄镇')$street='辛庄';
+			if($street == '么六桥乡')$street='幺六桥乡';
+			if($street == '大毕庄')$street='大毕庄镇';
+			if($street == '西堤头')$street='西堤头镇';
+			if($street == '青光镇')$street='青光';
+			if($street == '天穆镇')$street='天穆';
+			if($street == '北仓镇')$street='北仓';
+			if($street == '集贤街')$street='集贤里';
+			if($street == '双口镇')$street='双口';
+			if($street == '小淀镇')$street='小淀';
+			if($street == '迎宾街')$street='迎新街';
+			if($street == '尖山')$street='尖山路';
+			if($street == '马场街')$street='马场道';
+		}
+		if($this->city == 8)
+		{
+			if($street == '汽车厂区')$street ='厂区周边';
+			if($zone == '汽开')$zone ='汽车城';
+		}
+		if($this->city == 10)
+		{
+			if($street =='复兴路' && $pData['Community'] == '美政花苑')
+				$street ='南星';
+			else
+			{
+				if($street =='复兴路')$street ='复兴';
+			}
+			if($street == '德胜路')$street ='德胜';
+			if($street == '建国路')$street ='朝晖';
+			if($street == '钱江世纪新城')$street ='钱江世纪城';
+		}
+		if($this->city ==11)
+		{
+			if($zone =='高新园区')$zone ='高新园';
+			if($zone == "旅顺口")$zone = "旅顺";
+			if($street == '旅顺开发区')$street = "旅顺周边" ;
+			if($street == '马栏')$street = "马栏广场" ;
+			if($zone == '甘井子' && $street == '机场新区')$street='机场';
+		}
+		if($this->city == 12)
+		{
+			if($zone == '管城')$zone ='管城区';
+			if($zone == '高新技术开发区')$zone ='高新区';
+			if($pData['Community'] == '经济技术开发区')$pData['Community'] = '经开区';
+			if($pData['Community'] == '星城国际'){$zone = '郑州周边'; $street='中牟';}
+		}
+		if($this->city == 13)
+		{
+			if($street=='武泰闸烽火')$street = '武泰闸';
+			if($street=='东湖东亭')$street = '东亭';
+			if($street =='二七')$street ='二七路';
+			if($street =='台北路')$street ='台北香港路';
+		}
+		if($this->city ==14)
+		{
+			if($zone =='黄江' || $zone =='沙田')$zone ='东莞周边';
+			if($zone =='大朗')
+			{
+				$zone ='东莞周边';
+				$street = '大朗';
+			}
+		}
+		if($this->city == 16)
+		{
+			if($pData['Community'] == '温州城' && $street == '太原街')$street = '太原南街';
+			if($street=='滑翔地区')$street = '滑翔';
+			if($street=='皇寺')$street = '皇寺广场';
+			if($street=='艳粉地区')$street = '艳粉';
+		}
+		if($this->city == 17)
+		{
+			if($zone =='鹿泉市')$zone ='鹿泉';
+		}
+		if($this->city == 18)
+		{
+			if(strstr($street,'经开区'))$street = '经济技术开发区';
+			if($street =='高新一中' )$street ='高新路';
+			if($zone == "高新" )$zone = "高新区" ;
+		}
+		if($this->city == 19)
+		{
+			if($street=='仲宫')$street = '仲宫镇';
+			if($street=='甸柳新村')$street = '甸柳';
+		}
+		if($this->city ==24)
+		{
+			if($zone =='大亚湾区')$zone ='大亚湾';
+			if($zone =='惠阳区')$zone ='惠阳';
+			if($zone =='惠城区')$zone ='惠城';
+			if($zone =='博罗县')$zone ='博罗';
+			if($zone =='仲恺区')$zone ='仲恺';
+		}
+		if($this->city ==25)
+		{
+			if($zone =='海口')$zone ='海口周边';
+		}
+		if($this->city ==26)
+		{
+			if($street =='碧桂园')$street ='顺德碧桂园';
+		}
+		if($this->city ==30)
+		{
+			if($zone =='石岐区')$zone ='石岐';
+			if($zone =='港口镇')$zone ='港口';
+			if($zone =='南朗镇')$zone ='南朗';
+			if($zone =='其他')$zone ='中山周边';
+			if($zone =='南头镇')$zone ='南头';
+		}
+		if($this->city ==31)
+		{
+			if($zone =='榆阳')$street ='榆阳';
+		}
+		$this->zoneinfo = $zone;
+		$this->streetinfo = $street;
+		return true;
+	}
+ 	public function translate()
+	{
+		$tmp = $this->patten; 
+		/*过滤标题敏感词汇*/
+		//$this->checkWord();
+		$rData = $this->tmpfield ;
+		$pData = $this->data[$this->dataid] ;
+		if($pData['dataType'] == 'new')$pData['dataType'] = 'second_sale';
+		$patName=$pData['dataType'];
+		if($pData['dataType'] == 'rent')
+			$type = $pData['Type4Property2'];
+		else
+			$type = $pData['Type4Property'];
+		/*描述 标题等信息处理*/
+		$pData = $this->checkPdataInfo($pData);	
+			
+		$con = strip_tags($pData['Content']);
+		$gobalso = '';
+		for($i=1;$i<=9;$i++)
+			$gobalso .= '|'.mb_substr($con,rand(1,200),2, 'utf-8');
+		/*****对房源编号进行处理，58支持数字和字母******/
+		preg_match_all("/[0-9a-zA-Z]+/",$pData['ID2'],$ID2_arr);
+		if(!empty($ID2_arr[0]))
+		{
+			$ID2_string = '';
+			foreach ($ID2_arr[0] as $ID2_key)
+				$ID2_string .= $ID2_key;
+		}else
+		{
+			if(strstr($pData['Company'],'我爱我家') && $patName == 'rent')
+			{
+				$this->errInfo .= '|BH|';
+				$ID2_string = mt_rand(11111111,99999999);
+			}else
+				$ID2_string = ''; // $pData['ID2']
+		}
+		if($type >= 11 || $patName == 'rent')
+			$rData['housecode'] = mb_substr($ID2_string , 0 , 15 , 'utf-8');
+		else
+			$rData['user_defined'] = mb_substr($ID2_string , 0 , 15 , 'utf-8');
+		$this->housecode = mb_substr($ID2_string , 0 , 15 , 'utf-8');
+		if($patName == 'second_sale' && $type < 11)
+		{
+			$pData['Content'] = strip_tags($pData['Content']);
+			//$pData['Content'] = preg_replace("/\s/","",$pData['Content']);  
+			$pData['Content']=trim($pData['Content']);
+			$rData['fangYuanXiangQing'] =  mb_substr($pData['Content'] , 0 , 290 , 'utf-8');
+			$Content1 = $this->checkContent_d($pData['Content1']);
+			$Content2 = $this->checkContent_d($pData['Content2']);
+			$Content3 = $this->checkContent_d($pData['Content3']);
+			$rData['fuWuJieShao']=!empty($Content3)?$Content3:'本人做房产多年，一直本着专业的房产知识，为您服务，我会在短的时间内帮您买好满意的房子，不让您错失任何好房子，更不让您每天为买房的事烦心，欢迎随时拨打我电话。';//服务
+			$rData['xiaoQuPeiTao']=!empty($Content2)?$Content2:'小区地理位置好，配套设施齐全，交通便利，居民素质高。';//配套
+			$rData['yeZhuXingTai']=!empty($Content1)?$Content1:'业主诚心出售此房，欢迎您看房，如需了解其他信息请与我联系。';//心态
+			
+			$rData['fangYuanXiangQing'] = trim($rData['fangYuanXiangQing']);
+			$rData['fangYuanXiangQing'] = strip_tags($rData['fangYuanXiangQing']);
+			//$rData['fangYuanXiangQing'] = preg_replace("/\s/","",$rData['fangYuanXiangQing']);  
+			$rData['fangYuanXiangQing'] =  mb_substr($rData['fangYuanXiangQing'] , 0 , 290 , 'utf-8');
+			
+			//$rData['fuWuJieShao'] = preg_replace("/\s/","",$rData['fuWuJieShao']);  
+			$rData['fuWuJieShao'] = trim($rData['fuWuJieShao']);
+			$rData['fuWuJieShao'] =  mb_substr($rData['fuWuJieShao'] , 0 , 290 , 'utf-8');
+			
+			//$rData['xiaoQuPeiTao'] = preg_replace("/\s/","",$rData['xiaoQuPeiTao']);  
+			$rData['xiaoQuPeiTao'] = trim($rData['xiaoQuPeiTao']);
+			$rData['xiaoQuPeiTao'] =  mb_substr($rData['xiaoQuPeiTao'] , 0 , 290 , 'utf-8');
+			
+			//$rData['yeZhuXingTai'] = preg_replace("/\s/","",$rData['yeZhuXingTai']);  
+			$rData['yeZhuXingTai'] = trim($rData['yeZhuXingTai']);
+			$rData['yeZhuXingTai'] =  mb_substr($rData['yeZhuXingTai'] , 0 , 290 , 'utf-8');
+		}else
+			$rData['describe'] = $pData['Content'];//房源描述
+		$rData['title'] = mb_substr($pData['Topic'] , 0 , 25 , 'utf-8');
+		$this->errInfo .= '|&'.$type.'|';
+		if(in_array($type,array(13,14,17,18,99)))//13 厂房     14 仓库       17 土地      18 车位      99 其他
+		{ 
+			$rData['housecode'] = mb_substr($ID2_string , 0 , 20 , 'utf-8');
+			$this->housecode =  mb_substr($ID2_string , 0 , 20 , 'utf-8');
+			$rData['area'] = intval($pData['Square']);
+			$rData['room_upload_validate'] = '0.512467063060448';
+			if($patName=='rent')
+			{
+				$rData['type'] = '1';
+				if($pData['RentUnitDaily'] == 1)
+				{
+					$rData['rentPrice'] = round($pData['Total']/30/$pData['Square'],2);
+					$rData['rentUnit'] = 2;
+				}else 
+				{
+					$rData['rentPrice'] = $pData['Total'];
+					$rData['rentUnit'] = 1;
+				}
+			}else
+			{
+				$rData['type'] = '2';
+				$rData['salePrice'] = intval($pData['Total']);
+			}
+			switch($type)//房屋类型
+			{
+				case 13:$rData['plantType'] = 1;break ;
+				case 14:$rData['plantType'] = 2;break ;
+				case 17:$rData['plantType'] = 4;break ;
+				case 18:$rData['plantType'] = 3;break ;
+				case 99:$rData['plantType'] = 5;break ;
+				default:$rData['plantType'] = 1;break ;
+			}
+			$this->tmpfield = $rData ;
+			return true;
+		}elseif($type == 11)
+		{
+			$rData['room_upload_validate'] = 1;
+			$rData['jpType58'] = '1';
+			$rData['historyBusiness'] = '';
+			$rData['roomarea'] = intval($pData['Square']);
+			switch ($pData['Proper4Shop'])
+			{
+				case '1':$ObjectType_name = '住宅底商';$ObjectType_value = '3';break;
+				case '2':$ObjectType_name = '商业街卖场';$ObjectType_value = '1';break;
+				case '4':$ObjectType_name = '写字楼配套';$ObjectType_value = '2';break;
+				case '9':$ObjectType_name = '摊位柜台';$ObjectType_value = '4';break;
+				default :$ObjectType_name = '其他';$ObjectType_value = '3';break ;
+			}
+			$rData['jpType58'] = $ObjectType_value;
+			if($patName=='rent')
+			{
+				//租金的单位   0元/月, 1元/天/平方米, 2元/月/平方米
+				if($pData['RentUnitDaily'] == 1)
+				{
+					$rData['rentPrice'] = round($pData['Total']/30/$pData['Square'],2);
+					$rData['rentUnit'] = 2;
+				}elseif($pData['RentUnitDaily'] == 2)
+				{
+					$rData['rentPrice'] = round($pData['Total']/$pData['Square'],2);
+					$rData['rentUnit'] = 3;
+				}else 
+				{
+					$rData['rentPrice'] = $pData['Total'];
+					$rData['rentUnit'] = 1;
+				}
+				$rData['type'] = '1';
+			}else
+			{
+				$rData['salePrice_group_b'] = intval($pData['Total']);
+				$rData['type'] = '2';
+			}
+			$this->tmpfield = $rData ;
+			return true;
+		}elseif($type == 12)
+		{
+			$rData['room_upload_validate'] = 1;
+			$rData['roomarea'] = intval($pData['Square']);
+			$rData['is_unit_price'] = 1;
+			switch($pData['Type4Office'])
+			{
+				case 2:
+				case 3:$rData['officeType'] = 2;break ;
+				case 4:$rData['officeType'] = 3;break ;
+				default:$rData['officeType'] = 1;break ;
+			}
+			if($patName=='rent')
+			{
+				//租金的单位   0元/月, 1元/天/平方米, 2元/月/平方米
+				if($pData['RentUnitDaily'] == 1)
+				{
+					$rData['rentPrice'] = round($pData['Total']/30/$pData['Square'],2);
+					$rData['rentUnit'] = 2;
+				}elseif($pData['RentUnitDaily'] == 2)
+				{
+					$rData['rentPrice'] = round($pData['Total']/$pData['Square'],2);
+					$rData['rentUnit'] = 3;
+				}else 
+				{
+					$rData['rentPrice'] = $pData['Total'];
+					$rData['rentUnit'] = 1;
+				}
+				$rData['salePrice_bigcity'] = '';
+				$rData['type'] = '1';
+			}else
+			{
+				if($tmp['city'] == '4')
+				{
+					$rData['salePrice_normal'] = $pData['Total'];
+				}else
+				{
+					$rData['salePrice_bigcity'] = intval(($pData['Total']*10000)/$pData['Square']);
+					if($rData['salePrice_bigcity'] < 4500 || $rData['salePrice_bigcity'] > 999999)
+					{
+						$this->errInfo = $this->checkErrorD('发布失败,每平米均价应在4500~999999之间,请稍后再试。','请稍后再试1',$this->errInfo);
+						return FALSE ;
+					}
+				}
+				$rData['canRegister'] = '1';
+				$rData['type'] = '2';
+			}
+			$this->tmpfield = $rData ;
+			return true;
+		}else
+		{
+			$rData['title'] = mb_substr($pData['Topic'] , 0 , 30 , 'utf-8');
+			$rData['floor'] = getFloor($pData['Floor'],'floor') ;
+			if($rData['floor'] <=0)$rData['floor']	= '-1';
+			$rData['allFloor'] = getFloor($pData['Floor'],'total') ;	
+			$rData['room'] = getRoom($pData['Room'],'shi') ;	
+			$rData['hall'] = getRoom($pData['Room'],'ting') ;
+			$rData['bathroom'] = getRoom($pData['Room'],'wei') ;		
+			//-- 1.毛坯房 2.一般装修 3.中等装修 4.精装修 5.豪华装修
+			switch($pData['Decorate'])
+			{
+				case 1:$rData['housefit']='1' ;$fittype = '毛坯';break ;
+				case 2:$rData['housefit']='2' ;$fittype = '简单装修';break ;
+				case 3:$rData['housefit']='3' ;$fittype = '中等装修';break ;
+				case 4:$rData['housefit']='4' ;$fittype = '精装修';break ;
+				case 5:$rData['housefit']='5' ;$fittype = '豪华装修';break ;
+				default:$rData['housefit']='2' ;$fittype = '简单装修';break ;
+			}
+			switch($type)
+			{
+				case 1:$rData['housetype'] = 8;break ;//住宅
+				case 3:$rData['housetype'] = 1;break ;//公寓
+				case 4:$rData['housetype'] = 2;break ;//别墅
+				default:$rData['housetype'] = 8;break ;//住宅
+			}
+			switch($pData['Towards'])
+			{
+				case 1 :$Toward_id='9';$torwrd = '南北';break ;
+				case 2 :$Toward_id='10';$torwrd = '东西';break ;
+				case 3 :$Toward_id='1';$torwrd = '东';break ;
+				case 4 :$Toward_id='2';$torwrd = '南';break ;
+				case 5 :$Toward_id='3';$torwrd = '西';break ;
+				case 6 :$Toward_id='4';$torwrd = '北';break ;
+				case 7 :$Toward_id='5';$torwrd = '东南';break ;
+				case 8 :$Toward_id='6';$torwrd = '东北';break ;
+				case 9 :$Toward_id='7';$torwrd = '西南';break ;
+				case 10 :$Toward_id='8';$torwrd = '西北';break ;
+				default :$Toward_id='9';$torwrd = '南北';break ;
+			}
+			if($patName=='rent')
+			{
+				$rData['wuba_comm_id'] = $rData['wuba_CommId'];	
+				unset($rData['wuba_CommId']);
+				$rData['rentprice'] = intval($pData['Total']);
+				$rData['roomarea'] = intval($pData['Square']);
+				$rData['exposure'] = $Toward_id;
+				if($pData['Type4Property'] != '2')
+				{
+					$rData['rentType'] = '1';					
+				}else//合租
+				{
+					$rData['rentType'] = '2';
+					$woshi=$pData['Type4Property3'];
+					switch ($woshi)
+					{
+						case 0:$rData['bedroom'] = '1';break;
+						case 1:$rData['bedroom'] = '2';break;
+						case 2:$rData['bedroom'] = '3';break;
+						case 3:$rData['bedroom'] = '4';break;
+						default:$rData['bedroom'] = '1';break;					
+					}
+					$rData['sex'] = '0';
+					$rData['roomorient'] = $Toward_id;
+					unset($rData['exposure']);
+				}
+				//付款方式 -- 1.押一付三 2.押一付一 3.押一付六 4.押二付三 5.押二付二 6.押二付一 7.押一付十二 8.半年付不押 9.年付不押
+				switch($pData['Payment'])
+				{
+					case 0:$rData['paymode']='7';break ;
+					case 1:$rData['paymode']='5';break ;
+					case 2:$rData['paymode']= '1' ;break ;
+					case 3:$rData['paymode']='8';break ;
+					case 4:$rData['paymode']='6';break ;
+					case 5:$rData['paymode']='4';break ;
+					case 6:$rData['paymode']='2';break ;
+					case 7:$rData['paymode']='9';break ;
+					case 8:$rData['paymode']='8';break ;
+					case 9:$rData['paymode']='9';break ;
+					default:$rData['paymode']='5';break ;
+				}
+				//基础设施	水,电,煤气/天然气,暖气,有线电视,宽带,电梯,车位,电话,热水器,空调,冰箱,洗衣机,床,其它家具,衣柜,可做饭,沙发,独立卫生间,阳台
+				$tmpData = array_merge(explode(',',$pData['Infrastructure']),explode(',',$pData['Configuration']));
+				foreach($tmpData as $key)
+				{
+					if(empty($key))continue;
+					switch($key)
+					{	
+						case '宽带':$rData['fitment[]'][]='7';break ;
+						case '暖气':$rData['fitment[]'][]='13';break ;
+						case '有线电视':$rData['fitment[]'][]='2';break ;
+						case '热水器':$rData['fitment[]'][] = '6';break ;
+						case '洗衣机':$rData['fitment[]'][] = '5';break ;
+						case '冰箱':$rData['fitment[]'][] = '4';break ;
+						case '空调':$rData['fitment[]'][] = '3';break ;
+						case '床':$rData['fitment[]'][] = '1';break ;
+						case '可做饭':$rData['fitment[]'][] = '8';break ;
+						case '独立卫生间':$rData['fitment[]'][] = '9';break ;
+						case '阳台':$rData['fitment[]'][] = '10';break ;
+						case '衣柜':$rData['fitment[]'][] = '11';break ;
+						case '沙发':$rData['fitment[]'][] = '12';break ;
+						default:break ;
+					}
+				}
+			}else
+			{
+				if($tmp['city'] == '4')
+					$rData['file_no'] = $pData['ID3']; //备案编号
+				/*根据房源价格获得房源的首付和月贷*/
+				$price_Total = round($pData['Total'],2);
+				$shoufu = intval($price_Total-$price_Total*0.8*(8.75/10));//首付
+				$rate = 6.55/12/100;//月利率
+				$price_char = $price_Total-$shoufu;
+				$yuegong = ceil($price_char*$rate*pow((1+$rate),240)/(pow((1+$rate),240)-1)*10000);
+				$rData['downPayment'] = $shoufu;
+				$rData['monthPayment'] = $yuegong;
+				/*end*/
+				$rData['price'] = round($pData['Total'],2);
+				$rData['allArea'] = $pData['Square'];
+				$rData['age'] = !empty($pData['Years'])?$pData['Years']:date("Y");
+				if($tmp['city'] == '5')
+				{
+					$rData['commissionauto'] = round($pData['ContactMSN'],1);//佣金
+					if($rData['commissionauto'] > 5 || $rData['commissionauto'] < 0.1)
+					{
+						$this->errInfo .= '|YJ:'.$rData['commissionauto'].'|';
+						$rData['commissionauto'] = 2;
+					}
+				}elseif($tmp['city'] == '11')
+				{
+					$rData['commissionauto'] = round($pData['ContactMSN'],1);//佣金
+					if($rData['commissionauto'] > 3 || $rData['commissionauto'] < 0.5)
+					{
+						$this->errInfo .= '|YJ:'.$rData['commissionauto'].'|';
+						$rData['commissionauto'] = 2;
+					}
+				}
+				/*if($pData['Square2'] == '' || $pData['Square2'] == 0 )
+					$rData['unitArea'] = $pData['Square']-1;
+				else
+					$rData['unitArea'] = $pData['Square2'];*/
+				if(!empty($pData['Square2']))
+					$rData['unitArea'] = $pData['Square2'];
+				if($rData['unitArea']>=$pData['Square'])$rData['unitArea']=$pData['Square']-1;
+				$rData['property'] = '1';
+				$rData['houseorient'] = $Toward_id;
+				/***户室号****/
+				$rData['buildingvalue'] = (!empty($pData['Buildingvalue']) && $pData['Buildingvalue']!=',,,,')?$pData['Buildingvalue']:mt_rand(1,3);
+				$rData['buildingtype'] = !empty($pData['Buildingkey'])?$pData['Buildingkey']:1;
+				$rData['unit'] = !empty($pData['Unitvalue'])?$pData['Unitvalue']:mt_rand(1,3);
+				$rData['unittype'] = !empty($pData['Unitkey'])?$pData['Unitkey']:5;
+				if($rData['floor']>0)
+					$housenumber = $rData['floor'].'0'.mt_rand(1,2);
+				else
+					$housenumber = mt_rand(1,6).'0'.mt_rand(1,2);
+				$rData['housenumber'] = !empty($pData['Housenumber'])?$pData['Housenumber']:$housenumber;
+				/****end***/
+				switch($pData['Type4Property'])
+				{
+					case 1:$rData['housetype'] = 8;break ;//住宅
+					case 3:$rData['housetype'] = 1;break ;//公寓
+					case 4:$rData['housetype'] = 2;break ;//别墅
+					default:$rData['housetype'] = 8;break ;//住宅
+				}
+				switch($pData['Type4Structure'])
+				{
+					case 1 :$rData['housestruct'] = '1';$a = "板楼";break ;
+					case 2 :$rData['housestruct'] = '2';$a = "塔楼";break ;
+					case 8 :$rData['housestruct'] = '3';$a = "板塔结合";break ;
+					default :
+						if($rData['allFloor'] >= 7) //板楼 塔楼
+						{
+							$rData['housestruct'] = '2';//塔楼
+							$a = "塔楼";
+						}else
+						{
+							$rData['housestruct'] = '1';
+							$a = "板楼";
+						}
+					break ;
+				}
+				$tagnum = 0;
+				$w_sid = $this->site[$this->siteid]['wid'];
+				$tag4Webs_arr = (isset($pData['tag4Webs'][$w_sid]) && !empty($pData['tag4Webs'][$w_sid]))?$pData['tag4Webs'][$w_sid]:array();//新增标签字段
+				$TagsCommunity_arr = explode(',',$pData['TagsCommunity']);//房源标签
+				$TagsHouse_arr = explode(',',$pData['TagsHouse']);//小区标签
+				$tmp_tags = array_merge($tag4Webs_arr,$TagsCommunity_arr,$TagsHouse_arr);
+				/*$TagsHouseArr =array_unique($tmp_tags);//过滤重复的标签
+				if(count($TagsHouseArr) > 1 )
+				{
+					foreach($TagsHouseArr as $key=>$value)
+					{
+						if($value)
+						{
+							if(empty($value))continue;
+							$value = mb_substr($value, 0, 6, 'utf-8');
+							$rData['wu_ba_te_se['.$tagnum.']'] = $value;
+							$tagnum++;
+							if($tagnum>=4)break;
+						}
+					}
+				}else
+					$rData['wu_ba_te_se[]'] = array($torwrd,$fittype);
+					
+				$tempArr = explode(',',$pData['Infrastructure'].",".$pData['Configuration']) ;
+				if(count($tempArr)>0)
+				{
+					$tagnum = 0;
+					foreach($tempArr as $key=>$value)
+					{
+						if(empty($value))continue;
+						$rData['wu_ba_pei_tao['.$tagnum.']'] = $value;
+						$tagnum++;
+						if($tagnum>=4)break;
+					}
+				}else
+					$rData['wu_ba_pei_tao[]'] = array('水','电','电话');
+				$rData['peitaosheshi']=rtrim($rData['peitaosheshi'],'#');*/				
+				switch($pData['Type4Owner'])//产权
+				{
+					case 1 :$rData['propertyType'] = 2;break ;//经济适用房
+					case 3 :$rData['propertyType'] = 4;break ;//使用权
+					case 8 :$rData['propertyType'] = 1;break ;//商品房
+					case 9 :$rData['propertyType'] = 5;$rData['property'] = '2';break ;//商住两用
+					case 11 :$rData['propertyType'] = 3;break ;//公房
+					default :$rData['propertyType'] = 1;break ;//使用权
+				}
+				if($type == 4)//别墅
+				{
+					switch($pData['Type4Years'])//产权
+					{
+						case 1 :$rData['property'] = '1';break ;//70
+						case 2 :$rData['property'] = '2';break ;//50
+						case 3 :$rData['property'] = '3';break ;//40
+						default :$rData['property'] = '1';break ;
+					}
+				}
+				$ServerTagArr = array(
+					'置换服务'=>'1',
+					'过户代办'=>'13',
+					'新房买卖'=>'11',
+					'新房代购'=>'10',
+					'全程代办'=>'9',
+					'产权核验'=>'8',
+					'有钥匙'=>'7',
+					'专车接送'=>'6',
+					'全城看房'=>'5',
+					'投资咨询'=>'4',
+					'海外咨询'=>'3',
+					'法律咨询'=>'2',
+					'物业交割'=>'15',
+				);
+				$rData['label_servicetag[]'] = array();
+				if(!empty($pData['ServerTag']))
+				{
+					$tmparr = explode(',',$pData['ServerTag']);
+					foreach($tmparr as $v)
+					{
+						if(array_key_exists($v , $ServerTagArr))
+							$rData['label_servicetag[]'][] = $ServerTagArr[$v];
+					}
+				}else
+				{
+					$rData['label_servicetag[]'] = '7';
+				}
+			}
+			$this->tmpfield=$rData ;
+			return TRUE ;
+		}
+	}
+	private function checkPostInfo($check='',$id='')
+	{
+		//if($this->patten['city'] != '4')return false;
+		$tmp= $this->patten;
+		$pData = $this->data[$this->dataid] ;
+		$patName = $pData['dataType'] ;
+		$wid = $this->site[$this->siteid]['id'];
+		$userName = $this->site[$this->siteid]['userName'];
+		$userKey = $this->site[$this->siteid]['userKey'];
+		$HouseID = $pData['ID'];
+		$UID = $pData['UID'];
+		$time = date("Y-m-d H:i:s");
+		$UpdateTime = $pData['Updated'];
+		$table = 'ff_check_post_info_city58vip2';
+		$now_time = time();
+		if($patName == 'rent')
+			$type = '3';
+		else
+			$type = '6';
+		if($check == 'insert')
+		{
+			$tmpImageData = $this->tmpimagearray;
+			if(empty($tmpImageData))
+				return true;
+			/*存储图片信息*/
+			$HouseInfo = serialize($tmpImageData);
+			$HouseInfo = base64_encode($HouseInfo);
+		}
+		/*数据缓存到本地*/
+		if($this->db->connect($this->cookieDB) == false)return false;
+		$sql = "select UpdateTime,HouseInfo,AddTime,ComInfo from `{$table}` where WID = '{$wid}' and HouseID = '{$HouseID}' and Type = '{$type}' limit 1";
+		$res = $this->db->row($sql);
+		if(!empty($res['UpdateTime']) && !empty($res['HouseInfo']))
+		{
+			/*判断房源是否更新*/
+			if($res['UpdateTime'] == $UpdateTime)
+			{
+				/*房源在本地存储时间大于7天 就删除 该房源*/
+				$day_cha = round((time() - $res['AddTime'])/(3600*24));
+				$chekpostinfo = base64_decode($res['HouseInfo']);
+				if(unserialize($chekpostinfo) == false || $day_cha>=50)
+				{
+					$sql = "delete from `{$table}` where WID = '{$wid}' and HouseID = '{$HouseID}' and Type = '{$type}' limit 1";
+					$this->db->exe($sql);
+					$this->db->close();
+					$this->errInfo .= "del|";
+					return false;
+				}
+				if(!empty($id))
+				{
+					/*更新房源替换次数*/
+					$sql = "update `{$table}` set `Sid`='{$id}',`Time`='{$time}',`Count`=`Count`+1  where WID = '{$wid}' and HouseID = '{$HouseID}' and Type = '{$type}' limit 1";
+					$this->db->exe($sql);
+				}
+				$this->tmpimagearray = unserialize($chekpostinfo);
+				$this->db->close();
+				/*end*/
+				return true;
+			}else
+			{
+				/*房源更新执行房源修改操作*/
+				if($check == 'insert')
+				{
+					$sql = "update `{$table}` set `UpdateTime`='{$UpdateTime}',`HouseInfo`='{$HouseInfo}',`Time`='{$time}',`Sid`='{$id}',`Count`=0,`ComInfo`='{$comdateinfo}' where WID = '{$wid}' and HouseID = '{$HouseID}' and Type = '{$type}' limit 1";
+					$this->db->exe($sql);
+					//error_log('date:'.$time.'wid:'.$wid.',username:'.$userName.',key:'.$userKey.',HouseID:'.$HouseID.',error:update'."\r\n" , 3 , 'ganjicheckPostInfo.log') ;
+				}
+			}
+		}else
+		{
+			/*房源不存在，执行插入操作*/
+			if($check == 'insert')
+			{
+				$sql = "insert into `{$table}` (`UID`,`WID`,`HouseID`,`UpdateTime`,`HouseInfo`,`Time`,`Sid`,`Type`,`AddTime`,ComInfo) values ('{$UID}','{$wid}','{$HouseID}','{$UpdateTime}','{$HouseInfo}','{$time}','{$id}','{$type}','{$now_time}','{$comdateinfo}')";
+				$this->db->exe($sql);
+				//error_log('date:'.$time.'wid:'.$wid.',username:'.$userName.',key:'.$userKey.',HouseID:'.$HouseID.',error:insert'."\r\n" , 3 , 'ganjicheckPostInfo.log') ;
+			}
+		}
+		$this->db->close();
+		return false;
+	}
+ 	public function uploadpics()
+	{
+		$tmp= $this->patten;
+		$pData = $this->data[$this->dataid] ;
+		if($pData['dataType'] == 'new')$pData['dataType'] = 'second_sale';
+		/*对于特殊的封面图临时处理1*/
+		$Thumbnail_tmp=str_replace('_wm','',$pData['Thumbnail']);
+		//封面图不存在的情况下
+		if (!file_exists($this->picPath.$pData['Thumbnail']))
+		{
+			$this->errInfo .= '|PN|';
+			$Thumbnail_tmp='';
+		}
+		$patName = $pData['dataType'] ;
+		$pic_url = 'http://upd1.ajkimg.com/upload-anjuke';
+		$tmpCunpath = '/opt/lampp/htdocs/webpost/tmpsoufangpic/';
+		//$tmpCunpath = 'E:/xampp/htdocs/test/pic/';
+		$file_exit_count = 0;
+		$rData = $this->tmpfield ;
+		$tmpradate = array();
+		$imgArray1 = explode(',',$pData['Floorplans']) ;
+		$imgArray2 = explode(',',$pData['PhotoInterior']) ;
+		$imgArray3 = explode(',',$pData['PhotoOutdoor']) ;
+		$txtArray1 = explode(';',$pData['txtFloorplans']) ;
+		$txtArray2 = explode(';',$pData['txtPhotoInterior']) ;
+		$txtArray3 = explode(';',$pData['txtPhotoOutdoor']) ;
+		$imgArray = array_merge($imgArray1,$imgArray2,$imgArray3);
+		$count = 0;
+		foreach($imgArray as $i=>$value)
+		{
+			/*对于特殊的封面图临时处理2*/
+			if($Thumbnail_tmp == $value)$value=$pData['Thumbnail'];
+			if(empty($value))continue;
+			if(!file_exists($this->picPath.$value))
+			{
+				$file_exit_count++;
+				continue;
+			}
+			if(in_array($this->type,array(13,14,17,18,99)))
+				if($count>7)break;
+			else
+				if($count>23)break;
+			/*图片处理*/
+			$tmpContent = file_get_contents($this->picPath.$value) ;
+			if(strstr($tmpContent,'found on this server') || strstr($tmpContent,'</body></html>'))
+			{
+				$this->errInfo .= '|*|';
+				continue;
+			}
+			$tmpRand = md5(time()) ;
+			$tmpContent .= $tmpRand.mb_substr($tmpRand , 0 , mt_rand(1 , 32));
+			$tmpName = $this->file_tmp_name().'.jpg' ;
+			if(strstr($tmpContent,'anjuke'))
+			{
+				$tmpContent = str_replace('	anjuke','',$tmpContent);
+				//$this->errInfo .= '|tp|';
+			}
+			file_put_contents($tmpCunpath.$tmpName , $tmpContent);
+			$res = false;
+			if($this->old_city == 14)
+			{
+				$res = $this->resizeImage($tmpCunpath.$tmpName,600,$tmpCunpath.$tmpName);
+			}
+			if(strstr($tmpContent,'anjuke') && $res == false)
+			{
+				//$this->errInfo .= '|P|';
+				$this->small2large($tmpCunpath.$tmpName,$tmpCunpath.$tmpName);
+			}
+			$tmpdata = array(
+				'exif' => 'null',
+				'fileext' => '*.jpg;*.JPG;*.png;*.PNG;*.jpeg;*.JPEG;',
+				'Filename' => 'flashdata',
+				'flashdata' => '@'.$tmpCunpath.$tmpName,
+				'Upload' => 'Submit Query',
+			);
+			$this->methodPostAnjukePic($pic_url,$tmpdata,$tmp['encoding']) ;
+			unlink($tmpCunpath.$tmpName) ;
+			if(preg_match('/({"status":"ok".*(\}\}|""\}))/isU',$this->content , $con)<=0)
+			{
+				$this->falseStatus = 1 ;
+				$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','户型图上传失败|'.$filesize,$this->errInfo);
+				$this->content .= "\r\n".'AAAAAAAAAA|'.$this->nowTmpIp."\r\n";
+				$this->content.="\r\n".'BBBBBBB|'.print_r($this->tmphead,true)."\r\n";
+				$this->content .= "\r\n".'PPPPPPP|'.$tmpContent."\r\n";
+				return FALSE ;
+			}
+			$tmp_content = $con[0];
+			$tmp_content = str_replace('"\\\"','"\"',$tmp_content);
+			$tmp_content = str_replace('"\\"','"\"',$tmp_content);
+			$pic_arr = json_decode($tmp_content,true);
+			$t = mt_rand(1111,9999);
+			/*缓存信息--$tmpradate*/
+			$tmpradate['newupdroom['.$count.']'] = json_encode($pic_arr['image']);
+			$tmpradate['updroom['.$count.']'] = json_encode($pic_arr['image']);
+			$tmpradate['roomorder['.$count.']'] = $pic_arr['image']['id'];
+			if(strstr($value,$pData['Thumbnail']))
+				$tmpradate['defaultImgID'] = $pic_arr['image']['id'];
+			/*end*/
+			$count++;	
+		}
+		if($file_exit_count >=4)
+		{
+			$this->errInfo = $this->checkErrorD('发布失败,网络接口繁忙,请稍后再试。','图片不存在数量过多。'.$file_exit_count,$this->errInfo);
+			return FALSE;
+		}
+		/******end******/
+		$this->tmpimagearray = $tmpradate;
+		$this->tmpfield = array_merge($this->tmpfield,$this->tmpimagearray) ;
+		return TRUE ;
+	}
+ 	Public function delete()
+	{
+		$action = $this->site[$this->siteid]['action'];
+		$this->loginis = 'delete';
+		$HouseType = '';
+		if(empty($action))
+			$historyid = $this->getHistoryID();
+		else
+		{
+			$historyid = $this->historyid;
+			$HouseType = $this->history[$historyid]['HouseType'];
+		}
+		$patName = 	$this->history[$historyid]['dataType'] ;
+		$id = $this->history[$historyid]['RemoteID'];
+		if($HouseType == '15')
+			$act_type = 'cmianshui';
+		elseif($HouseType == '16')
+			$act_type = 'cchengxin';
+		else
+			$act_type = 'cancel';
+		$this->errInfo .= '|T:'.$HouseType.'|';
+		$res = $this->actionUpDown($patName,$act_type,$id);
+		if($res == false)
+		{
+			sleep(1);
+			$res = $this->actionUpDown($patName,$act_type,$id);
+			$this->errInfo .= '|Y1|';
+		}
+		sleep(2);
+		$res = $this->actionUpDown($patName,'del',$id);
+		if($res == false)
+		{
+			sleep(1);
+			$res = $this->actionUpDown($patName,'del',$id);
+			$this->errInfo .= '|Y|';
+		}
+		if($res)
+			return true;
+		else
+		{
+			$this->errInfo = '删除失败,网络接口繁忙,请稍后再试。@'.$this->errInfo;
+			return false;
+		}
+		//error_log(date("Y-m-d H:i:s").$this->WID.'|'.$id.'|'.$this->errInfo."\r\n",3,'aaaadeletelog.log');
+		return TRUE ;
+	}
+	Public function refresh()
+	{
+		$this->loginis = 'refresh';
+		return TRUE ;
+	}
+ 	Public function register()
+	{
+		$this->errInfo .= '此网站为付费端口需到58站进行手工申请注册付费!';
+		return FALSE;
+	}
+  	public function nurse($userName,$userKey , $wid , $city) //保姆套餐
+    {
+        $tmp= $this->patten;
+        $city = $tmp['city'];
+        $hot = $this->actionLogin($wid,$userName,$userKey,$city);
+        if($hot['status'] != 9)return FALSE;
+        $ret = array('房源总量'=>0,'新增房源'=>0,'刷新总量'=>0,'点击总量'=>0,'总点数'=>0,'标签房总量'=>0,'标签房新量剩余'=>0);
+        $this->isF5All = 'yes';
+		/*获取出售房源*/
+		$salenum = $this->actionListAll('sale');
+		/*获取出租房源*/
+		$rentnum = $this->actionListAll('rent');
+		$ret['房源总量'] = $salenum['all'] + $rentnum['all'];
+		$ret['新增房源'] = $salenum['new'] + $rentnum['new'];
+		$ret['点击总量'] = $salenum['allclick'] + $rentnum['allclick'];
+		$this->methodGet('http://vip.58ganji.com/ajax/spread/get58top?dispCateId=12&tgType=msfy&type=1', $tmp['encoding']);
+		$this->content = substr(strstr($this->content,"\r\n\r\n") , 4);
+		$tmparr_d = json_decode($this->content,true);
+		$tmparr = $tmparr_d['data'];
+		if(empty($tmparr))
+		{
+			$this->errInfo .= '|K1|';
+		}
+		$ret['标签房总量'] = $tmparr['used'];
+		$ret['标签房新量剩余'] = $tmparr['free'];
+        $this->methodGet('http://vip.58ganji.com/ajax/spread/get58top?dispCateId=8&tgType=cxfy&type=1', $tmp['encoding']);
+        $this->content = substr(strstr($this->content,"\r\n\r\n") , 4);
+		$tmparr_d = json_decode($this->content,true);
+		$tmparr = $tmparr_d['data'];
+		if(empty($tmparr))
+		{
+			$this->errInfo .= '|K2|';
+		}
+		$ret['标签房总量'] += $tmparr['used'];
+		$ret['标签房新量剩余'] += $tmparr['free'];
+        $nurse=array(
+             'surplusnum'=>$ret['总点数']-$ret['刷新总量'],
+             'newhouse'=>$ret['新增房源'],
+             'viphouse'=>$ret['房源总量'],
+             'biaoqiangfangzongliang'=>$ret['标签房总量'],
+             'biaoqianfangshengyu'=>$ret['标签房新量剩余']
+        );
+        if($nurse['surplusnum']<0)$nurse['surplusnum']=0;
+        return $nurse;
+    }
+ 	public function click($userName , $userKey , $wid , $city)
+	{
+		$this->loginis = 'click';
+		$tmp= $this->patten;
+		$city = $tmp['city'];
+		$hot = $this->actionLogin($wid,$userName,$userKey,$city);
+		if($hot['status'] != 9)return FALSE;
+		$this->isF5All = 'yes';
+		$ret = array();
+		$rentnum = $this->actionListAll('rent') ;
+		$salenum = $this->actionListAll('sale') ;
+		if($rentnum)
+		{
+			foreach($rentnum as $key=>$view)
+			{
+				if(is_array($view))
+				{
+					if($view['clickT'] == 0)continue;
+					$ret1['Community']= $view['com'];
+					$ret1['Room']     = $view['room'];
+					$ret1['Square']   = $view['square'];
+					$ret1['Price']    = $view['price'];
+					$ret1['ClickToday'] = $view['clickT'];
+					$ret1['ClickWeek'] = $view['clickW'];
+					$ret1['ClickMonth'] = $view['clickM'];
+					$ret1['RemoteID'] = $view['id'];
+					$ret1['Type'] = 3;
+					$ret[] = $ret1;
+				}
+			}
+		}
+		if($salenum)
+		{
+			foreach($salenum as $key=>$view)
+			{
+				if(is_array($view))
+				{
+					if($view['clickT'] == 0)continue;
+					$ret1['Community']= $view['com'];
+					$ret1['Room']     = $view['room'];
+					$ret1['Square']   = $view['square'];
+					$ret1['Price']    = $view['price'];
+					$ret1['ClickToday'] = $view['clickT'];
+					$ret1['ClickWeek'] = $view['clickW'];
+					$ret1['ClickMonth'] = $view['clickM'];
+					$ret1['RemoteID'] = $view['id'];
+					$ret1['Type'] = 6;
+					$ret[] = $ret1;
+				}
+			}
+		}
+		$ret['isF5'] = 0;
+		/*获取刷新量*/
+		$tt = date('Y-m-d',strtotime('yesterday'));
+		$this->methodGet('http://stat.vip.58.com/fanguse/getdetaildata/'.$tt.'/0?'.time(), $tmp['encoding']);
+		if(preg_match_all('/"refreshcount":([0-9]*),/isU',$this->content,$view))
+			$ret['isF5'] = array_sum($view[1]);
+		/*获取点击量*/
+		$ret['ClickSum'] = 0;
+		if(preg_match('/"userid=([^>]*)\&/isU',$this->webcookies,$view))
+			$UserID = $view[1];
+		if(!empty($UserID))
+		{
+			$this->methodGet('http://stat.vip.58.com/houseanalytics/date/'.$UserID.'/1?tType=1', $tmp['encoding']);
+			if(preg_match('/value=\'([0-9]*)\'/isU',$this->content,$view))
+				$ret['ClickSum'] = $view[1];
+		}
+		return $ret;
+	}
+	/*房源搬家*/
+	Public function getAbstract($sort , $num) 
+	{
+		$this->loginis = 'getAbstract';
+		$tmp= $this->patten;
+		$this->isF5All = 'yes';
+		$abstract = array() ; 
+		if($sort == 'second_sale')$sort = 'sale';
+		$tmpdata = $this->actionListAll($sort);
+		$tmpdata = array_slice($tmpdata,0,100);
+		$unit=$sort=='rent'?'元/月':'万';
+		foreach($tmpdata as $key=>$value)
+		{
+			if($value['HouseType'] == 11)
+				$housename = 'shangpu';
+			elseif($value['HouseType'] == 12)
+				$housename = 'zhaozu';
+			else
+			{
+				if($sort == "rent")
+					$housename = "zufang";
+				else
+					$housename = "ershoufang";
+			}
+			if(is_array($value))
+			{
+				$abstract[$key]['id'] = $value['id'] ;
+				$abstract[$key]['url'] = "http://{$tmp['cityName']}.58.com/{$housename}/{$value['id']}x.shtml";
+				$abstract[$key]['community'] = !empty($value['com'])?$value['com']:mb_substr($value['topic'],0,12,'utf-8').'...';
+				$abstract[$key]['title'] = $value['topic'] ;
+				$abstract[$key]['price'] = $value['price'].$unit ;
+				$abstract[$key]['square'] = $value['square'].'平';
+				$abstract[$key]['room'] = $value['room'].'室';
+				$abstract[$key]['Type4Property'] = $value['HouseType'];
+				$abstract[$key]['detail'] = '' ;
+				
+			}
+		}
+		return $abstract;
+	}
+ 	public function getDetail($sort,$id,$data=array())
+	{
+		$tmp = $this->patten;
+		$dataArray = array() ;
+		$type = 1;
+		if(isset($data['Type4Property']) && !empty($data['Type4Property']))$type = $data['Type4Property'];
+		$this->housetype = $type;
+		if($sort == 'rent')
+			$up_type1 = 'rent';
+   	 	else
+			$up_type1 = 'ershou';
+		
+		if($type == 12)
+		{
+			$update_url = 'http://vip.58ganji.com/house/publish/office/wb/'.$id.'?houseType=13';
+			if($this->getXZLInfo($update_url,$sort,$dataArray) == false)return false;
+		}elseif($type == 11)
+		{ 
+			$update_url = 'http://vip.58ganji.com/house/publish/shop/wb/'.$id.'?houseType=14';
+			if($this->getSPInfo($update_url,$sort,$dataArray) == false)return false;
+		}else
+		{
+			$update_url = 'http://vip.58ganji.com/house/publish/'.$up_type1.'/wb/'.$id.'?houseType=12';
+			if($this->getHouseInfo($update_url,$sort,$dataArray) == false)return false;
+		}	
+		/*获取图片*/
+		$pathinfo = $this->cityinfo($this->old_city_d);
+		$this->picpath = $pathinfo['path'];
+		if(!empty($pathinfo['pell']))$this->picpath .= '/'.$pathinfo['pell'];
+		if(preg_match_all("/name=\"(roomImagesSaved|modelImagesSaved|outsideImagesSaved)\"\s*value='([^>]*)'/isU",$this->content,$pic))
+		{
+			if($this->getimages($pic,$type,&$dataArray)==FALSE)
+			{
+				error_log(date('Y-m-d H:i:s')."|wid:".$this->WID."|city:".$this->old_city_d."|hid:".$id."|".$this->picPath.$this->pathall."\r\n",3,'aaaaaaaaaa58picerr.log');
+				return FALSE;
+			}
+		}
+		/*end*/
+		$data_time = date("Y-m-d H:i:s",time());
+		$dataArray['Date'] = $data_time;
+		$dataArray['Updated'] = $data_time;
+		$dataArray['Source'] = '58三合一复制';
+		return $dataArray ;
+	}
+ 	public function getHouseInfo($url,$sort,&$dataArray)
+	{
+		$tmp = $this->patten;
+		$dataArray = array();
+		for($i=0;$i<=6;$i++)
+		{
+			$this->methodGetDetail($url , $tmp['encoding']);
+			if($this->content == FALSE)
+			{
+				$this->errInfo .= '|House|';
+				return FALSE ;
+			}
+			if(strstr($this->content , '您访问的页面居然不存在'))
+			{
+				$this->errInfo .= '发布失败，网络接口繁忙，请稍后再试28。';
+				return false;
+			}
+			if(strstr($this->content,'HTTP/1.1 503 Service'))
+			{
+				sleep(1);
+				$this->errInfo .= '|FF|';
+				$this->methodGetDetail($url , $tmp['encoding']);
+			}
+			if(!strstr($this->content , '房源编号'))
+			{
+				$this->errInfo .= '发布失败，网络接口繁忙，请稍后再试18。';
+				return false;
+			}
+			/*通过是否有标题判断页面内容是否异常*/
+			preg_match('/name="?title"?[^>]*value=[\'"]([^>]*)[\'"]/isU',$this->content,$view);
+			if(empty($view[1]))
+			{
+				sleep(5);
+				$this->errInfo .= '|Y|';
+				$this->methodGetDetail($url , $tmp['encoding']);
+				continue;
+			}
+			break;
+		}
+		preg_match('/name="housecode"[^>]*value="([^"]*)"/isU' , $this->content , $view) ;
+		if(empty($view[1]))
+			preg_match('/name="user_defined"[^>]*value="([^"]*)"/isU' , $this->content , $view) ;
+		$dataArray['ID2'] = $view[1] ;//内部编号
+		preg_match('/>区域<.*value[^>]*selected="selected">([^<]*)<.*选择商圈<.*value[^>]*selected="selected">([^<]*)</isU' , $this->content , $view);
+		$dataArray['Zoned'] = $view[1];
+		$dataArray['Streetd'] = $view[2];
+		$old_content = $this->content;
+		if(preg_match('/value="([^"]*)"[^>]*name="community58"/isU' , $this->content , $view))
+		{
+			$Community_id = trim($view[1]) ;
+			if(empty($Community_id))
+			{
+				$this->errInfo .= 'B|2';
+				return false;
+			}else
+			{
+				if(is_numeric($Community_id))
+				{
+					$this->methodGet("http://post.58.com/ajax?&action=line1&id=".$Community_id , $tmp['encoding'],'','noheader') ;
+					if(empty($this->content))
+					{
+						$this->errInfo .= 'B|';
+						return false;
+					}
+					$xiaoqu = trim($this->content);
+				}else
+					$xiaoqu = $Community_id;
+			}
+			$dataArray['Community'] = $xiaoqu;//小区
+		}
+		$this->content = $old_content;
+		preg_match('/name="room"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;
+		$dataArray['Room'] = $view[1]*10000 ;//室
+		preg_match('/name="hall"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;
+		$dataArray['Room'] += $view[1]*1000 ;//厅
+		preg_match('/name="bathroom"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;
+		$dataArray['Room'] += $view[1]*10 ;//卫
+		$dataArray['Room'] += 101;
+		preg_match('/name="floor"\s*value="([^>]*)"/isU' , $this->content , $view) ;
+		$dataArray['Floor'] = $view[1] ;////当前楼层
+		preg_match('/name="allFloor"\s*value="([^>]*)"/isU' , $this->content , $view) ;
+		$dataArray['Floor'] += $view[1]*100 ;//总楼层
+		if($sort == 'rent')
+		{
+			$Type4P = 'Type4Property2';
+			$dataArray['Type4Property'] = '1';
+			preg_match('/name="rentType"\s*value="([^>]*)"/isU' , $this->content , $view) ;
+			if($view[1] == 2)//合租
+			{
+				$dataArray['Type4Property'] = '2';
+				if(preg_match('/name="bedroom".*selected>([^"]*)<\/option>/isU', $this->content , $view)<=0)
+					preg_match('/name="bedroom".*selected"\s*>([^"]*)<\/option>/isU', $this->content , $view);
+				switch($view[1])
+				{
+					case '主卧':$dataArray['Type4Property3'] = '0' ;break ;
+					case '次卧':$dataArray['Type4Property3'] = '1' ;break ;
+					case '隔断':$dataArray['Type4Property3'] = '2' ;break ;
+					case '床位':$dataArray['Type4Property3'] = '3' ;break ;
+					default :$dataArray['Type4Property3'] = '0' ;break ;
+				}
+			}
+			preg_match_all('/type="checkbox"\s*checked="checked"[^>]*name="fitment\[\]"[^>]*>([^<]*)</isU' , $this->content , $view) ;
+			foreach($view[1] as $key=>$value)
+			{
+				switch($value)
+				{
+					case '水':$Infrastructure .= '水,' ;break ;
+					case '暖气':$Infrastructure .= '暖气,' ;break ;
+					case '电视':$Infrastructure .= '有线电视,' ;break ;
+					case '宽带':$Infrastructure .= '宽带,' ;break ;
+					case '空调':$Configuration .= '空调,' ;break ;
+					case '床':$Configuration .= '床,' ;break ;
+					case '冰箱':$Configuration .= '冰箱,' ;break ;
+					case '洗衣机':$Configuration .= '洗衣机,' ;break ;
+					case '热水器':$Configuration .= '热水器,' ;break ;
+					case '可做饭':$Configuration .= '可做饭,' ;break ;
+					case '独立卫生间':$Configuration .= '独立卫生间,' ;break ;
+					case '阳台':$Configuration .= '阳台,' ;break ;
+					case '衣柜':$Configuration .= '衣柜,' ;break ;
+					case '沙发':$Configuration .= '沙发,' ;break ;
+				}
+			}
+			$dataArray['Infrastructure'] = substr($Infrastructure,0,-1);//配套
+			$dataArray['Configuration'] = substr($Configuration,0,-1);//室内
+			preg_match('/name="roomarea"\s*value="([^>]*)"/isU' , $this->content , $view) ;
+			$dataArray['Square'] = $view[1] ;//面积
+			preg_match('/value="([^>]*)"\s*name="rentprice"/isU' , $this->content , $view) ;
+			$dataArray['Total'] = $view[1] ;//价格
+			$dataArray['Years'] = date("Y") ;//年
+			preg_match('/name="paymode.*selected="selected"\s*>(.*)</isU' , $this->content , $view);
+	        switch($view[1])
+	        {
+	           case '面议':$dataArray['Payment'] = '0';break;
+	           case '付3押1':$dataArray['Payment'] = '1';break;
+	           case '付1押1':$dataArray['Payment'] = '2';break;
+	           case '半年付押1':$dataArray['Payment'] = '3';break;
+	           case '付3押2':$dataArray['Payment'] = '4';break;
+	           case '付2押2':$dataArray['Payment'] = '5';break;
+	           case '付1押2':$dataArray['Payment'] = '6';break;
+	           case '年付押1':$dataArray['Payment'] = '7';break;
+	           case '半年付':$dataArray['Payment'] = '8';break;
+	           case '年付':$dataArray['Payment'] = '9';break;
+	           case '半年付不押':$dataArray['Payment'] = '8';break;
+	           case '年付不押':$dataArray['Payment'] = '9';break;
+	           case '付2押1':$dataArray['Payment'] = '10';break;
+	           default :$dataArray['Payment'] = '0' ;break ;
+	        }
+			preg_match('/name="exposure".*selected="selected"\s*>([^<]*)</isU' , $this->content , $view) ;
+			switch($view[1])
+			{
+				case '南北':$dataArray['Towards'] = '1' ;break ;
+				case '东西':$dataArray['Towards'] = '2' ;break ;
+				case '东':$dataArray['Towards'] = '3' ;break ;
+				case '南':$dataArray['Towards'] = '4' ;break ;
+				case '西':$dataArray['Towards'] = '5' ;break ;
+				case '北':$dataArray['Towards'] = '6' ;break ;
+				case '东南':$dataArray['Towards'] = '7' ;break ;
+				case '东北':$dataArray['Towards'] = '8' ;break ;
+				case '西南':$dataArray['Towards'] = '9' ;break ;
+				case '西北':$dataArray['Towards'] = '10' ;break ;
+				default :$dataArray['Towards'] = '1' ;break ;
+			}
+		}else 
+		{
+			$Type4P = 'Type4Property';
+			if($tmp['city'] == 4)
+			{
+				preg_match('/name="file_no"\s*value="([^>]*)"/isU' , $this->content , $view) ;
+				$dataArray['ID3'] = $view[1] ;//备案编号
+			}
+			preg_match('/name="allArea"\s*value="([^>]*)"/isU' , $this->content , $view) ;
+			$dataArray['Square'] = $view[1] ;//面积
+			preg_match('/name="unitArea"\s*value="([^>]*)"/isU' , $this->content , $view) ;
+			$dataArray['Square2'] = $view[1] ;//套内面积
+			preg_match('/id="totalPrice"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;
+			$dataArray['Total'] = $view[1] ;//价格
+			preg_match('/name="age"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;
+			$dataArray['Years'] = $view[1] ;//年代
+			preg_match('/name="houseorient".*selected="selected">([^<]*)</isU' , $this->content , $view) ;
+			switch($view[1])///////
+			{
+				case '南北':$dataArray['Towards'] = '1' ;break ;
+				case '东西':$dataArray['Towards'] = '2' ;break ;
+				case '东':$dataArray['Towards'] = '3' ;break ;
+				case '南':$dataArray['Towards'] = '4' ;break ;
+				case '西':$dataArray['Towards'] = '5' ;break ;
+				case '北':$dataArray['Towards'] = '6' ;break ;
+				case '东南':$dataArray['Towards'] = '7' ;break ;
+				case '东北':$dataArray['Towards'] = '8' ;break ;
+				case '西南':$dataArray['Towards'] = '9' ;break ;
+				case '西北':$dataArray['Towards'] = '10' ;break ;
+				default :$dataArray['Towards'] = '1' ;break ;
+			}
+			preg_match('/name="housestruct".*selected="selected">([^<]*)</isU' , $this->content , $view) ;//结构
+			switch($view[1])
+			{
+				case '塔楼':$dataArray['Type4Structure'] = '2' ;break ;
+				case '板楼':$dataArray['Type4Structure'] = '1' ;break ;
+				default :$dataArray['Type4Structure'] = '1' ;break ;
+			}
+			preg_match('/name="propertyType".*selected="selected">([^<]*)</isU' , $this->content , $view) ;//结构
+			switch($view[1])
+			{
+				case '商品房':$dataArray['Type4Owner'] = '8' ;break ;
+				case '商住两用':$dataArray['Type4Owner'] = '9' ;break ;
+				case '经济适用房':$dataArray['Type4Owner'] = '1' ;break ;
+				case '使用权':$dataArray['Type4Owner'] = '3' ;break ;
+				case '公房':$dataArray['Type4Owner'] = '11' ;break ;
+				default :$dataArray['Type4Owner'] = '8' ;break ;
+			}
+			preg_match_all('/name="wu_ba_te_se\[\]"[^>]*checked="checked"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;//特色标签
+			foreach($view[1] as $key=>$value)
+				$TagsCommunity .= $value.',' ;	
+			$dataArray['TagsCommunity'] = substr($TagsCommunity,0,-1);
+			//preg_match_all('/name="wu_ba_pei_tao\[\]"[^>]*checked="checked"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;//配套实施
+		}
+		preg_match('/name="housetype".*selected="selected">([^<]*)</isU' , $this->content , $view) ;
+		switch($view[1])
+		{
+			case '普通住宅':$dataArray[$Type4P] = '1' ;break ;
+			case '公寓':$dataArray[$Type4P] = '3' ;break ;
+			case '别墅':$dataArray[$Type4P] = '4' ;break ;
+			default :$dataArray[$Type4P] = '1' ;break ;
+		}
+		preg_match('/name="housefit".*selected="selected"\s*>([^<]*)</isU' , $this->content , $view) ;//装修
+		switch($view[1])
+		{
+			case '毛坯':$dataArray['Decorate'] = '1' ;break ;
+			case '简单装修':$dataArray['Decorate'] = '2' ;break ;
+			case '中等装修':$dataArray['Decorate'] = '3' ;break ;
+			case '精装修':$dataArray['Decorate'] = '4' ;break ;
+			case '豪华装修':$dataArray['Decorate'] = '5' ;break ;
+			default :$dataArray['Decorate'] = '3' ;break ;
+		}
+		if(preg_match('/name="title"[^>]*value="(.*)"/isU' , $this->content , $view)<=0)
+			preg_match("/name=title[^>]*value='(.*)'/isU" , $this->content , $view);
+		$dataArray['Topic'] = $view[1] ;//标题
+		if(preg_match('/name="describe"[^>]*>(.*)<\/textarea>/isU' , $this->content , $view)<=0)
+			preg_match('/name=fangYuanXiangQing[^>]*>(.*)</isU' , $this->content , $view);
+		$view[1] = str_replace('&nbsp;',' ',$view[1]);
+		$dataArray['Content'] = html_entity_decode($view[1]) ;
+		if(($this->housetype == '1' || $this->housetype == '4') && $sort != 'rent')
+		{
+			$view[1] = str_replace("\r\n",'<br />',$view[1]);
+			$dataArray['Content'] = html_entity_decode($view[1]) ;
+			preg_match('/name=yeZhuXingTai[^>]*>(.*)<\/textarea>/isU',$this->content,$view);//心态
+			$view[1] = str_replace('&nbsp;',' ',$view[1]);
+			$dataArray['Content'] .= '@@=@@'.html_entity_decode($view[1]) ;
+			preg_match('/name=xiaoQuPeiTao[^>]*>(.*)<\/textarea>/isU',$this->content,$view);//小区配套
+			$view[1] = str_replace('&nbsp;',' ',$view[1]);
+			$dataArray['Content'] .= '@@=@@'.html_entity_decode($view[1]) ;
+			preg_match('/name=fuWuJieShao[^>]*>(.*)<\/textarea>/isU',$this->content,$view);//服务介绍
+			$view[1] = str_replace('&nbsp;',' ',$view[1]);
+			$dataArray['Content'] .= '@@=@@'.html_entity_decode($view[1]) ;
+		}else
+			$dataArray['Content'] = html_entity_decode($view[1]) ;
+		return $dataArray;
+	}
+	public function getXZLInfo($url,$sort,&$dataArray)
+	{
+		$tmp = $this->patten;
+		$dataArray = array();
+		for($i=0;$i<=6;$i++)
+		{
+			$this->methodGetDetail($url , $tmp['encoding']);
+			if($this->content == FALSE)
+			{
+				$this->errInfo .= '|XZL|';
+				return FALSE ;
+			}
+			if(strstr($this->content , '您访问的页面居然不存在'))
+			{
+				$this->errInfo .= '发布失败，网络接口繁忙，请稍后再试28。';
+				return false;
+			}
+			if(strstr($this->content,'HTTP/1.1 503 Service'))
+			{
+				sleep(1);
+				$this->errInfo .= '|FF|';
+				$this->methodGetDetail($url , $tmp['encoding']);
+			}
+			if(!strstr($this->content , '房源编号'))
+			{
+				$this->errInfo .= '发布失败，网络接口繁忙，请稍后再试18。';
+				return false;
+			}
+			/*通过是否有标题判断页面内容是否异常*/
+			preg_match('/name="?title"?[^>]*value=[\'"]([^>]*)[\'"]/isU',$this->content,$view);
+			if(empty($view[1]))
+			{
+				sleep(5);
+				$this->errInfo .= '|Y|';
+				$this->methodGetDetail($url , $tmp['encoding']);
+				continue;
+			}
+			break;
+		}
+		preg_match('/name="housecode"[^>]*value="([^"]*)"/isU' , $this->content , $view) ;
+		$dataArray['ID2'] = $view[1] ;//内部编号
+		preg_match('/name="title"[^>]*value="([^"]*)"/isU' , $this->content , $view) ;
+		$dataArray['Topic'] = $view[1] ;//标题
+		preg_match('/id="wuba-jp-input"[^>]*value="([^"]*)"/isU' , $this->content , $view) ;//小区名称
+		$dataArray['Community'] = trim($view[1]) ;
+		if($tmp['city'] == 1 && $this->WID == '4577602')
+		{
+			$dataArray['Community'] = preg_replace('/.*亦庄.*写字楼.*/','亦庄写字楼',$dataArray['Community']);
+			$dataArray['Community'] = preg_replace('/独院写字楼出租/','亦庄写字楼',$dataArray['Community']);
+			$dataArray['Community'] = preg_replace('/中航技大厦/','中航科技大厦',$dataArray['Community']);
+		}
+		preg_match('/name="roomarea"[^>]*value="([^"]*)"/isU',$this->content,$view);//面积
+		$dataArray['Square'] = $view[1] ;
+		preg_match('/name="describe"[^>]*>(.*)<\/textarea>/isU',$this->content,$view);//描述
+		$view[1] = str_replace('&nbsp;',' ',$view[1]);
+		$dataArray['Content'] = html_entity_decode($view[1]) ;
+		if($sort == 'rent')
+		{
+			$dataArray['Type4Property'] = '12';
+			$dataArray['Type4Property2'] = '12';
+			preg_match('/value="([^"]*)"[^>]*name="rentPrice_cityGroup[A-Z]"/is',$this->content,$view);//租金
+			$Total = $view[1];
+			if(preg_match('/name="rentPrice"[^>]*value=([^>]*)\s/isU',$this->content,$view))
+				$Total = $view[1] ;//价格
+			preg_match('/name="rentUnit"[^>]*value="(\d*)"/isU',$this->content,$view);//租金单位
+			$rentUnit = $view[1];
+			if(preg_match('/name="rentUnit"[^\[]*value="([^>]*)"[^>]*selected="selected"[^>]*>[^\[]*<\/select>/isU',$this->content,$view))
+				$rentUnit = $view[1];
+			//<!-- 1 元/月； 2 元/㎡*天；3 元/㎡月； -->
+			if($rentUnit == 1)
+			{
+				$dataArray['Total'] = $Total;
+				$dataArray['RentUnitDaily'] = '0';
+			}elseif($rentUnit == 2)
+			{
+				$dataArray['Total'] = $Total*30*$dataArray['Square'];
+				$dataArray['RentUnitDaily'] = '1';
+			}else
+			{
+				$dataArray['Total'] = $Total*$dataArray['Square'];
+				$dataArray['RentUnitDaily'] = '2';
+			}
+			$dataArray['Payment'] = '1';//支付
+		}else
+		{
+			$dataArray['Type4Property'] = '12';
+			preg_match('/value="([^>]*)"\s*name="salePrice_bigcity"/isU',$this->content,$view);//单价
+			$dataArray['Total'] = round(($view[1]*$dataArray['Square'])/10000,2);
+			$dataArray['RentUnitDaily'] = '0';
+		}
+		//默认值
+		$dataArray['Fees'] = '0';//物业费
+		$dataArray['Floor'] = '101';//楼层
+		$dataArray['Room'] = '11111';//户型
+		$dataArray['Type4Office'] = '1';//写字楼类型
+		$dataArray['Level'] = '0';//等级
+		$dataArray['Years'] = date('Y')-1;//建筑年代
+		$dataArray['Towards'] = '3';//朝向
+		$dataArray['Decorate'] = '2';//装修程度
+		return $dataArray;
+	}
+	public function getSPInfo($url,$sort,&$dataArray)
+	{
+		$tmp = $this->patten;
+		$dataArray = array();
+		for($i=0;$i<=6;$i++)
+		{
+			$this->methodGetDetail($url , $tmp['encoding']);
+			if($this->content == FALSE)
+			{
+				$this->errInfo .= '|SP|';
+				return FALSE ;
+			}
+			if(strstr($this->content , '您访问的页面居然不存在'))
+			{
+				$this->errInfo .= '发布失败，网络接口繁忙，请稍后再试28。';
+				return false;
+			}
+			if(strstr($this->content,'HTTP/1.1 503 Service'))
+			{
+				sleep(1);
+				$this->errInfo .= '|FF|';
+				$this->methodGetDetail($url , $tmp['encoding']);
+			}
+			if(!strstr($this->content , '房源编号'))
+			{
+				$this->errInfo .= '发布失败，网络接口繁忙，请稍后再试18。';
+				return false;
+			}
+			/*通过是否有标题判断页面内容是否异常*/
+			preg_match('/name="?title"?[^>]*value=[\'"]([^>]*)[\'"]/isU',$this->content,$view);
+			if(empty($view[1]))
+			{
+				sleep(5);
+				$this->errInfo .= '|Y|';
+				$this->methodGetDetail($url , $tmp['encoding']);
+				continue;
+			}
+			break;
+		}
+		preg_match('/name="housecode"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;//编号
+		$dataArray['ID2'] = trim($view[1]) ;
+		preg_match('/name="location58"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;//小区名称
+		$dataArray['Community'] = trim($view[1]) ;
+		preg_match('/name="roomarea"[^>]*value="([^>]*)"/isU',$this->content,$view);//面积
+		$dataArray['Square'] = $view[1] ;
+		preg_match('/name="title"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;//标题
+		$dataArray['Topic'] = $view[1] ;
+		preg_match('/name="describe"[^>]*>(.*)<\/textarea>/isU',$this->content,$view);//描述
+		$view[1] = str_replace('&nbsp;',' ',$view[1]);
+		$dataArray['Content'] = html_entity_decode($view[1]) ;
+		preg_match('/name="rentPrice_cityD"[^>]*value="([^>]*)"/isU' , $this->content , $view) ;//租金
+		$Total = $view[1];
+		if(preg_match('/name="rentPrice"[^>]*value=([^>]*)\s/isU',$this->content,$view))
+			$Total = $view[1] ;//价格
+		if($sort == 'rent')
+		{
+			$dataArray['Type4Property'] = '11';
+			$dataArray['Type4Property2'] = '11';
+			preg_match('/name="rentUnit"[^>]*value="(\d*)"/isU',$this->content,$view);//租金单位
+			$rentUnit = $view[1];
+			if(preg_match('/name="rentUnit"[^\[]*value="([^>]*)"[^>]*selected="selected"[^>]*>[^\[]*<\/select>/isU',$this->content,$view))
+				$rentUnit = $view[1];
+			//<!-- 1 元/月； 2 元/㎡*天；3 元/㎡月； -->
+			if($rentUnit == 1)
+			{
+				$dataArray['Total'] = $Total;
+				$dataArray['RentUnitDaily'] = '0';
+			}elseif($rentUnit == 2)
+			{
+				$dataArray['Total'] = $Total*30*$dataArray['Square'];
+				$dataArray['RentUnitDaily'] = '1';
+			}else
+			{
+				$dataArray['Total'] = $Total*$dataArray['Square'];
+				$dataArray['RentUnitDaily'] = '2';
+			}
+		}else
+		{
+			$dataArray['Type4Property'] = '11';
+			$dataArray['RentUnitDaily'] = '0';
+			$dataArray['Total'] = round($Total/10000,2);
+		}
+		//商铺类型： 1住宅底商  2商业街商铺  8酒店底商  3旅游商铺  6社区商铺  7沿街门脸。
+		preg_match('/name="jpType58".*selected">([^<]*)</is',$this->content,$view);
+		switch($view[1])
+		{
+			case '商业街卖场':$Proper4Shop = '2' ;break ;
+			case '写字楼配套':$Proper4Shop = '4' ;break ;
+			case '住宅底商':$Proper4Shop = '1' ;break ;
+			default:$Proper4Shop = '1' ;break ;
+		}
+		$dataArray['Proper4Shop'] = $Proper4Shop;//铺面类型
+		//默认
+		$dataArray['Floor'] = '101';//楼层
+		$dataArray['Room'] = '11111';//户型
+		$dataArray['Years'] = date('Y')-1;//年代
+		$dataArray['Target'] = 0; //目标业态
+		$dataArray['Infrastructure'] = '';
+		$dataArray['Configuration'] = '';
+		$dataArray['Towards'] = '3';//朝向
+		$dataArray['Decorate'] = '2';//装修程度
+		$dataArray['Fees'] = '0';//物业费
+		return $dataArray;
+	}
+ 	public function getimages($imgInfoArr,$Htype,&$dataArray)
+	{
+		$tmp = $this->patten;
+		$Floorplans_count = 0;
+		$PhotoInterior_count = 0;
+		$dataArray['Floorplans'] = '';
+		$dataArray['PhotoInterior'] = '';
+		$dataArray['PhotoOutdoor'] = '';
+		$watermarkout = new watermarkout();//实例化去水印类
+		$imgInfoArr_arr = json_decode($imgInfoArr[2][0],true);
+		foreach($imgInfoArr_arr as $key=>$img_value)
+		{
+			$url = str_replace(array('420x315c','420x315'),'800x600X0',$img_value['src']);//去水印
+			if($img_value['isCover'] == 1)$Thumbnail = $url;
+			$tname = 'PhotoInterior';
+			$PhotoInterior_count++;
+			$ret = $this->getimagespic($url,$tname,$Thumbnail);
+			if($ret == FALSE)continue;
+			if(!empty($ret['Thumbnail']))
+				$dataArray['Thumbnail'] = $ret['Thumbnail'];
+			$dataArray[$tname] .= $ret[$tname];
+			if($ret['width']>=2500 && $ret['height']>=2500)continue;
+			$watermarkout->web   = 111;
+			$watermarkout->pictype = 1;
+			$watermarkout->url = $url;
+			$watermarkout->SubFull = $tmp['city'];
+			$watermarkout->srcPath = $this->picPath.$this->pathall;
+			$watermarkout->desPath = $this->picPath.$this->pathall;
+			$watermarkout->exe();
+		}
+		if(empty($dataArray['Thumbnail']))
+		{
+			$pic_arr = explode(',',$dataArray['PhotoInterior']);
+			$dataArray['Thumbnail'] = $pic_arr[1];
+		}
+		return true;	
+	}
+ 	public function getimagespic($url,$tname,$Thumbnail)
+	{
+		$tmp = $this->patten;
+		$this->pathall = $this->picpath.'/pic/'.date('Ymd').'/'.date('s').'/'.time().$this->UID.rand(11111,99999).'.jpg';
+		$this->createFolder(dirname($this->picPath.$this->pathall));
+		$c = $this->methodGet($url,'UTF-8');
+		$c = substr(strstr($c,"\r\n\r\n") , 4);
+		if(strstr($c,'found on this server') || strstr($c,'</body></html>'))return FALSE;
+		if(file_put_contents($this->picPath.$this->pathall , $c) <= 0)
+			return FALSE ;
+		//图片压缩
+		if($this->imageZoom($this->picPath.$this->pathall,$this->picPath.$this->pathall) == false)return FALSE;	
+		list($orgw,$orgh)= getimagesize($this->picPath.$this->pathall);	
+		$data_arr['width'] = $orgw;
+		$data_arr['height'] = $orgh;
+		if(strstr($url,$Thumbnail))$data_arr['Thumbnail'] = $this->pathall;
+		$data_arr[$tname] = ','.$this->pathall;
+		return $data_arr;
+	}
+ 	public function getuserinfo()
+	{
+		$tmp = $this->patten;
+		$ret = array();
+		$this->methodGet('http://vip.58ganji.com/broker/brokerinfo',$tmp['encoding']);
+		if(preg_match('/真实姓名：(.*)</isU',$this->content,$view))
+		{
+			$ret['name'] = trim($view[1]);
+		}else
+		{	
+			$this->errInfo.='N';
+			return  false;
+		}
+		$this->methodGet('http://vip.58ganji.com/broker/brokerphones/',$tmp['encoding']);
+		if(preg_match('/58手机号码：(.*)</isU',$this->content,$view))
+		{
+			$ret['phone'] = trim($view[1]);
+		}else
+		{	
+			$this->errInfo.='M';
+			return  false;
+		}
+		return $ret;
+	}
+}
+?>
