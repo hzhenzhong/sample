@@ -1,9 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Sample App</title>
-</head>
-<body>
-  <h1>主页</h1>
-</body>
-</html>
+@extends('module.content1')
+@section('content2')
+6756676657567657
+@stop
